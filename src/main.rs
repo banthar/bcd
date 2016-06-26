@@ -3,11 +3,11 @@ extern crate byteorder;
 use std::error::Error;
 use std::env;
 use std::fs::File;
-use std::io::{Read, ErrorKind};
+use std::io::{Read, Write, ErrorKind, stdout};
 use byteorder::{BigEndian, ReadBytesExt};
 
 #[derive(Debug)]
-enum Constant<> {
+enum Constant {
 	Class(u16),
 	Fieldref(u16, u16),
 	Methodref(u16, u16),
@@ -216,11 +216,20 @@ fn parse_class_file(file_name: &str) -> Result<ClassFile, Box<Error>> {
 	parse_class(&mut file)
 }
 
+
+fn dump_class(class: &ClassFile, out: Write) {
+	println!("{:#?}", class.access_flags);
+	if (class.access_flags & 0x4000) == 0x4000 {
+		write!(&mut out, "enum");
+	}
+// 	println!("{:#?}", class);
+}
+
 fn main() {
 	for arg in env::args().skip(1) {
 		match  parse_class_file(&arg) {
 			Err(e) => {println!("{}", e); break;},
-			Ok(v) => println!("{:#?}", &v)
+			Ok(v) => dump_class(&v, stdout())
 		}
 	}
 }
