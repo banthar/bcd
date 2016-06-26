@@ -1,0 +1,7 @@
+[package]
+name = "jdc"
+version = "0.1.0"
+authors = ["Piotr Praszmo <ppraszmo@gmail.com>"]
+
+[dependencies]
+byteorder = "0.5"
