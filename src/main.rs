@@ -149,10 +149,6 @@ fn parse_constant(input: &mut Read) -> Result<Constant, Box<Error>> {
 	}
 }
 
-fn vec_to_u16(bytes: Vec<u8>) -> u16 {
-	(bytes[0] as u16) << 8 | (bytes[1] as u16)
-}
-
 fn parse_field(input: &mut Read, constants: &Vec<Constant>) -> Result<Field, Box<Error>> {
 	let access_flags = try!(input.read_u16::<BigEndian>());
 	let name_index = try!(input.read_u16::<BigEndian>());
@@ -161,8 +157,16 @@ fn parse_field(input: &mut Read, constants: &Vec<Constant>) -> Result<Field, Box
 	let mut signature = None;
 	try!(parse_attributes(input, constants, |name, value| {
 		return match name {
-			"ConstantValue" => {constant_value = Some(vec_to_u16(value)); Ok(())},
-			"Signature" => {signature = Some(value); Ok(())},
+			"ConstantValue" => {
+				constant_value = Some(try!(value.read_u16::<BigEndian>()));
+				Ok(())
+			},
+			"Signature" => {
+				let mut s = String::new();
+				try!(value.read_to_string(&mut s));
+				signature = Some(s);
+				Ok(())
+			},
 			_ => Err(parse_error(&format!("Unknown field attribute: {}", name)))
 		}
 	}));
@@ -176,7 +180,12 @@ fn parse_method(input: &mut Read, constants: &Vec<Constant>) -> Result<Method, B
 	let mut code = None;
 	try!(parse_attributes(input, constants, |name, value| {
 		return match name {
-			"Code" => {code = Some(value); Ok(())},
+			"Code" => {
+				let mut code_bytes = Vec::new();
+				try!(value.read_to_end(&mut code_bytes));
+				code = Some(code_bytes);
+				Ok(())
+			},
 			_ => Err(parse_error(&format!("Unknown method attribute: {}", name)))
 		}
 	}));
@@ -184,15 +193,14 @@ fn parse_method(input: &mut Read, constants: &Vec<Constant>) -> Result<Method, B
 }
 
 fn parse_attributes<F>(input: &mut Read, constants: &Vec<Constant>, mut f : F) -> Result<(), Box<Error>> where 
-	F: FnMut(&str, Vec<u8>) -> Result<(), Box<Error>> {
+	F: FnMut(&str, &mut Read) -> Result<(), Box<Error>> {
 	let count = try!(input.read_u16::<BigEndian>());
 	for _ in 0 .. count {
 		let name_index = try!(input.read_u16::<BigEndian>());
 		let name = get_string_constant(constants, name_index);
-		let length = try!(input.read_u32::<BigEndian>()) as usize;
-		let mut bytes = vec![0u8; length];
-		try!(input.read_exact(&mut bytes[..]));
-		try!(f(name, bytes));
+		let length = try!(input.read_u32::<BigEndian>()) as u64;
+		let mut value = input.take(length);
+		try!(f(name, &mut value));
 	}
 	Ok(())
 }
@@ -233,7 +241,10 @@ fn parse_class(input: &mut Read) -> Result<ClassFile, Box<Error>> {
 	let mut source_file = None;
 	try!(parse_attributes(input, &constant_pool, |name, value| {
 		return match name {
-			"SourceFile" => {source_file = Some(vec_to_u16(value));Ok(())},
+			"SourceFile" => {
+				source_file = Some(try!(value.read_u16::<BigEndian>()));
+				Ok(())
+			},
 			_ => Err(parse_error(&format!("Unknown class attribute: {}", name)))
 		}
 	}));
