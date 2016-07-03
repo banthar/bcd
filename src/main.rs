@@ -26,12 +26,20 @@ enum Constant {
 }
 
 fn get_string_constant(constants: &Vec<Constant>, id: u16) -> &str {
-	match constants[id as usize - 1] {
+	let constant = &constants[id as usize - 1];
+	match *constant {
 		Constant::Utf8(ref s) => s,
-		_ => panic!("Constant is not a string: {:?}", constants[id as usize - 1]),
+		_ => panic!("Constant is not a string: {:?}", constant),
 	}
 }
 
+fn get_class_constant(constants: &Vec<Constant>, id: u16) -> &str {
+	let constant = &constants[id as usize - 1];
+	match *constant {
+		Constant::Class(name_id) => get_string_constant(constants, name_id),
+		_ => panic!("Constant is not a class: {:?}", constant),
+	}
+}
 
 #[derive(Debug)]
 struct Field {
@@ -331,6 +339,14 @@ fn dump_method(class: &ClassFile, method: &Method, delexer: &mut Delexer) {
 	}
 	delexer.token(get_string_constant(&class.constant_pool, method.descriptor_index));
 	delexer.token(get_string_constant(&class.constant_pool, method.name_index));
+	match method.code {
+		Some(ref code) => { 
+			delexer.start_bracket();
+			delexer.token(&format!("{:?}", code));
+			delexer.end_bracket();
+		},
+		None => delexer.token(";"),
+	}
 	delexer.end_line();
 }
 
@@ -348,7 +364,7 @@ fn dump_class(class: &ClassFile, delexer: &mut Delexer) {
 		0x4000 => delexer.token("enum"),
 		_ => panic!("Unsupported class access flags: 0x{:04x}", class.access_flags)
 	}
-			delexer.token(get_string_constant(&class.constant_pool, class.this_class));
+	delexer.token(get_class_constant(&class.constant_pool, class.this_class));
 	delexer.start_bracket();
 
 	match class.source_file {
