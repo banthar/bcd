@@ -3,7 +3,7 @@ extern crate byteorder;
 use std::error::Error;
 use std::env;
 use std::fs::File;
-use std::io::{Read, Write, ErrorKind, stdout};
+use std::io::{Read, ErrorKind};
 use byteorder::{BigEndian, ReadBytesExt};
 
 #[derive(Debug)]
@@ -25,18 +25,20 @@ enum Constant {
 	Unusable,
 }
 
-#[derive(Debug)]
-struct Attribute {
-	name_index: u16,
-	info: Vec<u8>,
+fn get_string_constant(constants: &Vec<Constant>, id: u16) -> &str {
+	match constants[id as usize - 1] {
+		Constant::Utf8(ref s) => s,
+		_ => panic!("Constant is not a string: {:?}", constants[id as usize - 1]),
+	}
 }
+
 
 #[derive(Debug)]
 struct Field {
 	access_flags: u16,
 	name_index: u16,
 	descriptor_index: u16,
-	attributes: Vec<Attribute>
+	constant_value: Option<u16>,
 }
 
 #[derive(Debug)]
@@ -44,7 +46,7 @@ struct Method {
 	access_flags: u16,
 	name_index: u16,
 	descriptor_index: u16,
-	attributes: Vec<Attribute>
+	code: Option<Vec<u8>>
 }
 
 #[derive(Debug)]
@@ -56,20 +58,20 @@ struct ClassFile {
 	interfaces: Vec<u16>,
 	fields: Vec<Field>,
 	methods: Vec<Method>,
-	attributes: Vec<Attribute>,
+	source_file: Option<u16>,
 }
 
 fn parse_error(message: &str) -> Box<Error> {
 	Box::new(std::io::Error::new(ErrorKind::Other, message))
 }
 
-fn parse_u16(input: &mut Read) -> Result<u16, Box<Error>> {
+fn parse_u16(input: &mut Read, _: &Vec<Constant>) -> Result<u16, Box<Error>> {
 	Ok(try!(input.read_u16::<BigEndian>()))
 }
 
-fn parse_list<T>(input: &mut Read, parse_item: fn(&mut Read) -> Result<T,Box<Error>>) -> Result<Vec<T>, Box<Error>> {
+fn parse_list<T>(input: &mut Read, constants: &Vec<Constant>, parse_item: fn(&mut Read, &Vec<Constant>) -> Result<T,Box<Error>>  ) -> Result<Vec<T>, Box<Error>> {
 	let count = try!(input.read_u16::<BigEndian>());
-	(0 .. count).map(|_| parse_item(input)).collect()
+	(0 .. count).map(|_| parse_item(input, constants)).collect()
 }
 
 
@@ -139,28 +141,52 @@ fn parse_constant(input: &mut Read) -> Result<Constant, Box<Error>> {
 	}
 }
 
-fn parse_field(input: &mut Read) -> Result<Field, Box<Error>> {
+fn vec_to_u16(bytes: Vec<u8>) -> u16 {
+	(bytes[0] as u16) << 8 | (bytes[1] as u16)
+}
+
+fn parse_field(input: &mut Read, constants: &Vec<Constant>) -> Result<Field, Box<Error>> {
 	let access_flags = try!(input.read_u16::<BigEndian>());
 	let name_index = try!(input.read_u16::<BigEndian>());
 	let descriptor_index = try!(input.read_u16::<BigEndian>());
-	let attributes = try!(parse_list(input, parse_attribute));
-	Ok(Field{access_flags: access_flags, name_index: name_index, descriptor_index: descriptor_index, attributes: attributes})
+	let mut constant_value = None;
+	let mut signature = None;
+	try!(parse_attributes(input, constants, |name, value| {
+		return match name {
+			"ConstantValue" => {constant_value = Some(vec_to_u16(value)); Ok(())},
+			"Signature" => {signature = Some(value); Ok(())},
+			_ => Err(parse_error(&format!("Unknown field attribute: {}", name)))
+		}
+	}));
+	Ok(Field{access_flags: access_flags, name_index: name_index, descriptor_index: descriptor_index, constant_value: constant_value})
 }
 
-fn parse_method(input: &mut Read) -> Result<Method, Box<Error>> {
+fn parse_method(input: &mut Read, constants: &Vec<Constant>) -> Result<Method, Box<Error>> {
 	let access_flags = try!(input.read_u16::<BigEndian>());
 	let name_index = try!(input.read_u16::<BigEndian>());
 	let descriptor_index = try!(input.read_u16::<BigEndian>());
-	let attributes = try!(parse_list(input, parse_attribute));
-	Ok(Method{access_flags: access_flags, name_index: name_index, descriptor_index: descriptor_index, attributes: attributes})
+	let mut code = None;
+	try!(parse_attributes(input, constants, |name, value| {
+		return match name {
+			"Code" => {code = Some(value); Ok(())},
+			_ => Err(parse_error(&format!("Unknown method attribute: {}", name)))
+		}
+	}));
+	Ok(Method{access_flags: access_flags, name_index: name_index, descriptor_index: descriptor_index, code: code})
 }
 
-fn parse_attribute(input: &mut Read) -> Result<Attribute, Box<Error>> {
-	let name_index = try!(input.read_u16::<BigEndian>());
-	let length = try!(input.read_u32::<BigEndian>()) as usize;
-  let mut bytes = vec![0u8; length];
-	try!(input.read_exact(&mut bytes[..]));
-	Ok(Attribute{name_index: name_index, info: bytes})
+fn parse_attributes<F>(input: &mut Read, constants: &Vec<Constant>, mut f : F) -> Result<(), Box<Error>> where 
+	F: FnMut(&str, Vec<u8>) -> Result<(), Box<Error>> {
+	let count = try!(input.read_u16::<BigEndian>());
+	for _ in 0 .. count {
+		let name_index = try!(input.read_u16::<BigEndian>());
+		let name = get_string_constant(constants, name_index);
+		let length = try!(input.read_u32::<BigEndian>()) as usize;
+		let mut bytes = vec![0u8; length];
+		try!(input.read_exact(&mut bytes[..]));
+		try!(f(name, bytes));
+	}
+	Ok(())
 }
 
 fn parse_class(input: &mut Read) -> Result<ClassFile, Box<Error>> {
@@ -189,15 +215,20 @@ fn parse_class(input: &mut Read) -> Result<ClassFile, Box<Error>> {
 			},
 		}
 	}
-
 	let access_flags = try!(input.read_u16::<BigEndian>());
 	let this_class = try!(input.read_u16::<BigEndian>());
 	let super_class = try!(input.read_u16::<BigEndian>());
 
-	let interfaces = try!(parse_list(input, parse_u16));
-	let fields = try!(parse_list(input, parse_field));
-	let methods = try!(parse_list(input, parse_method));
-	let attributes = try!(parse_list(input, parse_attribute));
+	let interfaces = try!(parse_list(input, &constant_pool, parse_u16));
+	let fields = try!(parse_list(input, &constant_pool, parse_field));
+	let methods = try!(parse_list(input, &constant_pool, parse_method));
+	let mut source_file = None;
+	try!(parse_attributes(input, &constant_pool, |name, value| {
+		return match name {
+			"SourceFile" => {source_file = Some(vec_to_u16(value));Ok(())},
+			_ => Err(parse_error(&format!("Unknown class attribute: {}", name)))
+		}
+	}));
 
 	Ok(ClassFile{
 		constant_pool: constant_pool,
@@ -207,7 +238,7 @@ fn parse_class(input: &mut Read) -> Result<ClassFile, Box<Error>> {
 		interfaces: interfaces,
 		fields: fields,
 		methods: methods,
-		attributes: attributes
+		source_file: source_file,
 	})
 }
 
@@ -216,20 +247,135 @@ fn parse_class_file(file_name: &str) -> Result<ClassFile, Box<Error>> {
 	parse_class(&mut file)
 }
 
+struct Delexer {
+	line_start: bool,
+	indent: u32,
+}
 
-fn dump_class(class: &ClassFile, out: Write) {
-	println!("{:#?}", class.access_flags);
-	if (class.access_flags & 0x4000) == 0x4000 {
-		write!(&mut out, "enum");
+impl Delexer {
+	pub fn new() -> Delexer {
+		Delexer {
+			line_start: true,
+			indent: 0,
+		}
 	}
-// 	println!("{:#?}", class);
+	pub fn token(&mut self, lex: &str) {
+		if !self.line_start {
+			print!(" ");
+		} else {
+			for _ in 0 .. self.indent {
+				print!("\t");
+			}
+		}
+		print!("{}", lex);
+		self.line_start = false;
+	}
+	pub fn separator(&mut self, lex: &str) {
+		print!("{}", lex);
+	}
+	pub fn end_line(&mut self) {
+		print!("\n");
+		self.line_start = true;
+	}
+	pub fn start_bracket(&mut self) {
+		self.token("{");
+		self.end_line();
+		self.indent += 1;
+	}
+	pub fn end_bracket(&mut self) {
+		self.indent -= 1;
+		self.token("}");
+		self.end_line();
+	}
+}
+
+fn dump_field(class: &ClassFile, field: &Field, delexer: &mut Delexer) {
+	if field.access_flags & 0x0001 == 0x0001 {
+		delexer.token("public");
+	}
+	if field.access_flags & 0x0002 == 0x0002 {
+		delexer.token("private");
+	}
+	if field.access_flags & 0x0004 == 0x0004 {
+		delexer.token("protected");
+	}
+	if field.access_flags & 0x0008 == 0x0008 {
+		delexer.token("static");
+	}
+	if field.access_flags & 0x0010 == 0x0010 {
+		delexer.token("final");
+	}
+	if field.access_flags & 0x0040 == 0x0040 {
+		delexer.token("volatile");
+	}
+	if field.access_flags & 0x0080 == 0x0080 {
+		delexer.token("transient");
+	}
+	delexer.token(get_string_constant(&class.constant_pool, field.descriptor_index));
+	delexer.token(get_string_constant(&class.constant_pool, field.name_index));
+
+	match field.constant_value {
+		Some(constant_id) => {
+			delexer.token("=");
+			delexer.token(&format!("{:?}", class.constant_pool[constant_id as usize - 1]));
+		}
+		None => {},
+	}
+	delexer.separator(";");
+	delexer.end_line();
+}
+
+fn dump_method(class: &ClassFile, method: &Method, delexer: &mut Delexer) {
+	if method.access_flags & 0x0001 == 0x0001 {
+		delexer.token("public");
+	}
+	delexer.token(get_string_constant(&class.constant_pool, method.descriptor_index));
+	delexer.token(get_string_constant(&class.constant_pool, method.name_index));
+	delexer.end_line();
+}
+
+fn dump_class(class: &ClassFile, delexer: &mut Delexer) {
+	if (class.access_flags & 0x0001) == 0x0001 {
+		delexer.token("public");
+	}
+	if (class.access_flags & 0x0010) == 0x0010 {
+		delexer.token("final");
+	}
+	match class.access_flags & 0x6600 {
+		0x0000 => delexer.token("class"),
+		0x0600 => delexer.token("interface"),
+		0x2000 => delexer.token("@interface"),
+		0x4000 => delexer.token("enum"),
+		_ => panic!("Unsupported class access flags: 0x{:04x}", class.access_flags)
+	}
+			delexer.token(get_string_constant(&class.constant_pool, class.this_class));
+	delexer.start_bracket();
+
+	match class.source_file {
+		Some(source_file) => { 
+			delexer.token("//");
+			delexer.token(get_string_constant(&class.constant_pool, source_file));
+			delexer.end_line();
+		}
+		None => ()
+	}
+
+	for field in &class.fields {
+		dump_field(class, &field, delexer);
+	}
+	for method in &class.methods {
+		dump_method(class, &method, delexer);
+	}
+	delexer.end_bracket();
 }
 
 fn main() {
 	for arg in env::args().skip(1) {
 		match  parse_class_file(&arg) {
 			Err(e) => {println!("{}", e); break;},
-			Ok(v) => dump_class(&v, stdout())
+			Ok(v) => {
+				dump_class(&v, &mut Delexer::new());
+			}
 		}
 	}
 }
