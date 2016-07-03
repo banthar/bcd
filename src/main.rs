@@ -58,10 +58,33 @@ struct ExceptionTableEntry {
 }
 
 #[derive(Debug)]
+enum StackType {
+	Integer,
+	Long,
+	Float,
+	Double,
+	Reference,
+}
+
+#[derive(Debug)]
+enum Instruction {
+	Nop,
+	IntegerConstant(u32),
+	LoadConstant(u16),
+	Load(StackType, u8),
+	Store(StackType, u8),
+	InvokeSpecial(u16),
+	Return,
+	Increment(u8, u32),
+	PutField(u16),
+	PutStatic(u16),
+}
+
+#[derive(Debug)]
 struct Code {
 	max_stack: u16,
 	max_locals: u16,
-	code_bytes: Vec<u8>,
+	instructions: Vec<Instruction>,
 	exception_table: Vec<ExceptionTableEntry>,
 }
 
@@ -202,12 +225,44 @@ fn parse_exception_table_entry(input: &mut Read, _: &Vec<Constant>) -> Result<Ex
 	})
 }
 
+fn parse_instructions(input: &mut Read, constants: &Vec<Constant>) -> Result<Vec<Instruction>, Box<Error>> {
+	let mut instructions = Vec::new();
+	loop {
+		let mut byte = [0];
+		if try!(input.read(&mut byte)) == 0 {
+			break
+		}
+		let opcode = byte[0];
+		let instruction = match opcode {
+			0x00 => Instruction::Nop,
+			0x03 => Instruction::IntegerConstant(0),
+			0x04 => Instruction::IntegerConstant(1),
+			0x05 => Instruction::IntegerConstant(2),
+			0x06 => Instruction::IntegerConstant(3),
+			0x07 => Instruction::IntegerConstant(4),
+			0x08 => Instruction::IntegerConstant(5),
+			0x10 => Instruction::IntegerConstant(try!(input.read_u8()) as u32),
+			0x11 => Instruction::IntegerConstant(try!(input.read_u16::<BigEndian>()) as u32),
+			0x12 => Instruction::LoadConstant(try!(input.read_u8()) as u16),
+			0x2a => Instruction::Load(StackType::Reference, 0),
+			0x3b => Instruction::Store(StackType::Integer, 0),
+			0xb7 => Instruction::InvokeSpecial(try!(input.read_u16::<BigEndian>())),
+			0xb1 => Instruction::Return,
+			0xb3 => Instruction::PutStatic(try!(input.read_u16::<BigEndian>())),
+			0xb5 => Instruction::PutField(try!(input.read_u16::<BigEndian>())),
+			0x84 => Instruction::Increment(try!(input.read_u8()), try!(input.read_u8()) as u32),
+			_ => return Err(parse_error(&format!("Unknown opcode: 0x{:x}", opcode)))
+		};
+		instructions.push(instruction);
+	}
+	Ok(instructions)
+}
+
 fn parse_code(input: &mut Read, constants: &Vec<Constant>) -> Result<Code, Box<Error>> {
 	let max_stack = try!(input.read_u16::<BigEndian>());
 	let max_locals = try!(input.read_u16::<BigEndian>());
 	let code_length = try!(input.read_u32::<BigEndian>());
-	let mut code_bytes = Vec::with_capacity(code_length as usize);
-	try!(input.take(code_length as u64).read_to_end(&mut code_bytes));
+	let instructions = try!(parse_instructions(&mut input.take(code_length as u64), constants));
 	let exception_table = try!(parse_list(input, constants, parse_exception_table_entry));
 	try!(parse_attributes(input, constants, |name, value| {
 		match name {
@@ -222,7 +277,7 @@ fn parse_code(input: &mut Read, constants: &Vec<Constant>) -> Result<Code, Box<E
 	Ok(Code{
 		max_stack: max_stack,
 		max_locals: max_locals,
-		code_bytes: code_bytes,
+		instructions: instructions,
 		exception_table: exception_table,
 	})
 }
