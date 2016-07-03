@@ -50,11 +50,27 @@ struct Field {
 }
 
 #[derive(Debug)]
+struct ExceptionTableEntry {
+		start_pc: u16,
+		end_pc: u16,
+		handler_pc: u16,
+		catch_type: u16,
+}
+
+#[derive(Debug)]
+struct Code {
+	max_stack: u16,
+	max_locals: u16,
+	code_bytes: Vec<u8>,
+	exception_table: Vec<ExceptionTableEntry>,
+}
+
+#[derive(Debug)]
 struct Method {
 	access_flags: u16,
 	name_index: u16,
 	descriptor_index: u16,
-	code: Option<Vec<u8>>
+	code: Option<Code>
 }
 
 #[derive(Debug)]
@@ -173,17 +189,54 @@ fn parse_field(input: &mut Read, constants: &Vec<Constant>) -> Result<Field, Box
 	Ok(Field{access_flags: access_flags, name_index: name_index, descriptor_index: descriptor_index, constant_value: constant_value})
 }
 
+fn parse_exception_table_entry(input: &mut Read, _: &Vec<Constant>) -> Result<ExceptionTableEntry, Box<Error>> {
+	let start_pc = try!(input.read_u16::<BigEndian>());
+	let end_pc = try!(input.read_u16::<BigEndian>());
+	let handler_pc = try!(input.read_u16::<BigEndian>());
+	let catch_type = try!(input.read_u16::<BigEndian>());
+	Ok(ExceptionTableEntry{
+		start_pc: start_pc,
+		end_pc: end_pc,
+		handler_pc: handler_pc,
+		catch_type: catch_type,
+	})
+}
+
+fn parse_code(input: &mut Read, constants: &Vec<Constant>) -> Result<Code, Box<Error>> {
+	let max_stack = try!(input.read_u16::<BigEndian>());
+	let max_locals = try!(input.read_u16::<BigEndian>());
+	let code_length = try!(input.read_u32::<BigEndian>());
+	let mut code_bytes = Vec::with_capacity(code_length as usize);
+	try!(input.take(code_length as u64).read_to_end(&mut code_bytes));
+	let exception_table = try!(parse_list(input, constants, parse_exception_table_entry));
+	try!(parse_attributes(input, constants, |name, value| {
+		match name {
+			"LineNumberTable" => {
+				let mut bytes = Vec::new();
+				try!(value.read_to_end(&mut bytes));
+				Ok(())
+			},
+			_ => Err(parse_error(&format!("Unknown code attribute: {}", name)))
+		}
+	}));
+	Ok(Code{
+		max_stack: max_stack,
+		max_locals: max_locals,
+		code_bytes: code_bytes,
+		exception_table: exception_table,
+	})
+}
+
+
 fn parse_method(input: &mut Read, constants: &Vec<Constant>) -> Result<Method, Box<Error>> {
 	let access_flags = try!(input.read_u16::<BigEndian>());
 	let name_index = try!(input.read_u16::<BigEndian>());
 	let descriptor_index = try!(input.read_u16::<BigEndian>());
 	let mut code = None;
 	try!(parse_attributes(input, constants, |name, value| {
-		return match name {
+		match name {
 			"Code" => {
-				let mut code_bytes = Vec::new();
-				try!(value.read_to_end(&mut code_bytes));
-				code = Some(code_bytes);
+				code = Some(try!(parse_code(value, constants)));
 				Ok(())
 			},
 			_ => Err(parse_error(&format!("Unknown method attribute: {}", name)))
