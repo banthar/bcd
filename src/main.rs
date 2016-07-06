@@ -72,18 +72,22 @@ enum Instruction {
 	IntegerConstant(u32),
 	LoadConstant(u16),
 	Load(StackType, u8),
+	Add(StackType),
 	Store(StackType, u8),
 	InvokeSpecial(u16),
 	Return,
+	Throw,
 	Increment(u8, u32),
 	PutField(u16),
 	PutStatic(u16),
+	Goto(i16),
 }
 
 #[derive(Debug)]
 struct Code {
 	max_stack: u16,
 	max_locals: u16,
+	stack_map_table: Vec<u8>,
 	instructions: Vec<Instruction>,
 	exception_table: Vec<ExceptionTableEntry>,
 }
@@ -244,13 +248,32 @@ fn parse_instructions(input: &mut Read, constants: &Vec<Constant>) -> Result<Vec
 			0x10 => Instruction::IntegerConstant(try!(input.read_u8()) as u32),
 			0x11 => Instruction::IntegerConstant(try!(input.read_u16::<BigEndian>()) as u32),
 			0x12 => Instruction::LoadConstant(try!(input.read_u8()) as u16),
+			0x15 => Instruction::Load(StackType::Integer, try!(input.read_u8())),
+			0x1a => Instruction::Load(StackType::Integer, 0),
+			0x1b => Instruction::Load(StackType::Integer, 1),
+			0x1c => Instruction::Load(StackType::Integer, 2),
+			0x1d => Instruction::Load(StackType::Integer, 3),
 			0x2a => Instruction::Load(StackType::Reference, 0),
+			0x2b => Instruction::Load(StackType::Reference, 1),
+			0x2c => Instruction::Load(StackType::Reference, 2),
+			0x2d => Instruction::Load(StackType::Reference, 3),
+			0x36 => Instruction::Store(StackType::Integer, try!(input.read_u8())),
 			0x3b => Instruction::Store(StackType::Integer, 0),
+			0x3c => Instruction::Store(StackType::Integer, 1),
+			0x3d => Instruction::Store(StackType::Integer, 2),
+			0x3e => Instruction::Store(StackType::Integer, 3),
+			0x4b => Instruction::Store(StackType::Reference, 0),
+			0x4c => Instruction::Store(StackType::Reference, 1),
+			0x4d => Instruction::Store(StackType::Reference, 2),
+			0x4e => Instruction::Store(StackType::Reference, 3),
+			0x60 => Instruction::Add(StackType::Integer),
+			0x84 => Instruction::Increment(try!(input.read_u8()), try!(input.read_u8()) as u32),
+			0xa7 => Instruction::Goto(try!(input.read_i16::<BigEndian>())),
 			0xb7 => Instruction::InvokeSpecial(try!(input.read_u16::<BigEndian>())),
 			0xb1 => Instruction::Return,
 			0xb3 => Instruction::PutStatic(try!(input.read_u16::<BigEndian>())),
 			0xb5 => Instruction::PutField(try!(input.read_u16::<BigEndian>())),
-			0x84 => Instruction::Increment(try!(input.read_u8()), try!(input.read_u8()) as u32),
+			0xbf => Instruction::Throw,
 			_ => return Err(parse_error(&format!("Unknown opcode: 0x{:x}", opcode)))
 		};
 		instructions.push(instruction);
@@ -264,11 +287,18 @@ fn parse_code(input: &mut Read, constants: &Vec<Constant>) -> Result<Code, Box<E
 	let code_length = try!(input.read_u32::<BigEndian>());
 	let instructions = try!(parse_instructions(&mut input.take(code_length as u64), constants));
 	let exception_table = try!(parse_list(input, constants, parse_exception_table_entry));
+	let mut stack_map_table = Vec::new();
 	try!(parse_attributes(input, constants, |name, value| {
 		match name {
 			"LineNumberTable" => {
 				let mut bytes = Vec::new();
 				try!(value.read_to_end(&mut bytes));
+				Ok(())
+			},
+			"StackMapTable" => {
+				let mut bytes = Vec::new();
+				try!(value.read_to_end(&mut bytes));
+				stack_map_table = bytes;
 				Ok(())
 			},
 			_ => Err(parse_error(&format!("Unknown code attribute: {}", name)))
@@ -277,6 +307,7 @@ fn parse_code(input: &mut Read, constants: &Vec<Constant>) -> Result<Code, Box<E
 	Ok(Code{
 		max_stack: max_stack,
 		max_locals: max_locals,
+		stack_map_table: stack_map_table,
 		instructions: instructions,
 		exception_table: exception_table,
 	})
@@ -461,10 +492,14 @@ fn dump_method(class: &ClassFile, method: &Method, delexer: &mut Delexer) {
 	match method.code {
 		Some(ref code) => { 
 			delexer.start_bracket();
-			delexer.token(&format!("{:?}", code));
+			for instruction in &code.instructions {
+				delexer.token(&format!("{:?}", instruction));
+				delexer.separator(";");
+				delexer.end_line();
+			}
 			delexer.end_bracket();
 		},
-		None => delexer.token(";"),
+		None => delexer.separator(";"),
 	}
 	delexer.end_line();
 }
