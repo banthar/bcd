@@ -57,7 +57,7 @@ struct ExceptionTableEntry {
 		catch_type: u16,
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 enum StackType {
 	Integer,
 	Long,
@@ -66,7 +66,7 @@ enum StackType {
 	Reference,
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 enum CompareType {
 	EQ,
 	NE,
@@ -76,7 +76,7 @@ enum CompareType {
 	LE,
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 enum Instruction {
 	Nop,
 	IntegerConstant(u32),
@@ -89,13 +89,13 @@ enum Instruction {
 	Return,
 	GetStatic(u16),
 	Dup,
-	New,
+	New(u16),
 	Throw,
 	Increment(u8, u32),
 	PutField(u16),
 	PutStatic(u16),
-	Compare(StackType, CompareType, i16),
-	Goto(i16),
+	Compare(StackType, CompareType, usize),
+	Goto(usize),
 }
 
 #[derive(Debug)]
@@ -244,15 +244,31 @@ fn parse_exception_table_entry(input: &mut Read, _: &Vec<Constant>) -> Result<Ex
 	})
 }
 
-fn parse_instructions(input: &mut Read, constants: &Vec<Constant>) -> Result<Vec<Instruction>, Box<Error>> {
-	let mut instructions = Vec::new();
-	loop {
-		let mut byte = [0];
-		if try!(input.read(&mut byte)) == 0 {
-			break
-		}
-		let opcode = byte[0];
-		let instruction = match opcode {
+fn read_u8(bytes: &[u8], position: &mut usize) -> u8 {
+	let b = bytes[*position];
+	*position+=1;
+	b
+}
+
+fn read_u16(bytes: &[u8], position: &mut usize) -> u16 {
+	(read_u8(bytes, position) as u16) << 8u16 | (read_u8(bytes, position) as u16)
+}
+
+fn read_i16(bytes: &[u8], position: &mut usize) -> i16 {
+	read_u16(bytes, position) as i16
+}
+
+fn relative_jump(ip:usize, offset:i16) -> usize {
+	((ip as i64) + (offset as i64)) as usize
+}
+
+fn parse_instructions(code: &[u8], constants: &Vec<Constant>) -> Result<Vec<Instruction>, Box<Error>> {
+	let mut instructions = vec![Instruction::Nop; code.len()];
+	let mut i = 0;
+	while i < code.len() {
+		let ip = i;
+		let opcode = read_u8(code, &mut i);
+		instructions[ip] = match opcode {
 			0x00 => Instruction::Nop,
 			0x03 => Instruction::IntegerConstant(0),
 			0x04 => Instruction::IntegerConstant(1),
@@ -260,10 +276,10 @@ fn parse_instructions(input: &mut Read, constants: &Vec<Constant>) -> Result<Vec
 			0x06 => Instruction::IntegerConstant(3),
 			0x07 => Instruction::IntegerConstant(4),
 			0x08 => Instruction::IntegerConstant(5),
-			0x10 => Instruction::IntegerConstant(try!(input.read_u8()) as u32),
-			0x11 => Instruction::IntegerConstant(try!(input.read_u16::<BigEndian>()) as u32),
-			0x12 => Instruction::LoadConstant(try!(input.read_u8()) as u16),
-			0x15 => Instruction::Load(StackType::Integer, try!(input.read_u8())),
+			0x10 => Instruction::IntegerConstant(read_u8(code, &mut i) as u32),
+			0x11 => Instruction::IntegerConstant(read_u16(code, &mut i) as u32),
+			0x12 => Instruction::LoadConstant(read_u8(code, &mut i) as u16),
+			0x15 => Instruction::Load(StackType::Integer, read_u8(code, &mut i)),
 			0x1a => Instruction::Load(StackType::Integer, 0),
 			0x1b => Instruction::Load(StackType::Integer, 1),
 			0x1c => Instruction::Load(StackType::Integer, 2),
@@ -272,7 +288,7 @@ fn parse_instructions(input: &mut Read, constants: &Vec<Constant>) -> Result<Vec
 			0x2b => Instruction::Load(StackType::Reference, 1),
 			0x2c => Instruction::Load(StackType::Reference, 2),
 			0x2d => Instruction::Load(StackType::Reference, 3),
-			0x36 => Instruction::Store(StackType::Integer, try!(input.read_u8())),
+			0x36 => Instruction::Store(StackType::Integer, read_u8(code, &mut i)),
 			0x3b => Instruction::Store(StackType::Integer, 0),
 			0x3c => Instruction::Store(StackType::Integer, 1),
 			0x3d => Instruction::Store(StackType::Integer, 2),
@@ -283,27 +299,26 @@ fn parse_instructions(input: &mut Read, constants: &Vec<Constant>) -> Result<Vec
 			0x4e => Instruction::Store(StackType::Reference, 3),
 			0x59 => Instruction::Dup,
 			0x60 => Instruction::Add(StackType::Integer),
-			0x84 => Instruction::Increment(try!(input.read_u8()), try!(input.read_u8()) as u32),
-			0x9f => Instruction::Compare(StackType::Integer, CompareType::EQ, try!(input.read_i16::<BigEndian>())),
-			0xa0 => Instruction::Compare(StackType::Integer, CompareType::NE, try!(input.read_i16::<BigEndian>())),
-			0xa1 => Instruction::Compare(StackType::Integer, CompareType::LT, try!(input.read_i16::<BigEndian>())),
-			0xa2 => Instruction::Compare(StackType::Integer, CompareType::GE, try!(input.read_i16::<BigEndian>())),
-			0xa3 => Instruction::Compare(StackType::Integer, CompareType::GT, try!(input.read_i16::<BigEndian>())),
-			0xa4 => Instruction::Compare(StackType::Integer, CompareType::LE, try!(input.read_i16::<BigEndian>())),
-			0xa5 => Instruction::Compare(StackType::Reference, CompareType::EQ, try!(input.read_i16::<BigEndian>())),
-			0xa6 => Instruction::Compare(StackType::Reference, CompareType::NE, try!(input.read_i16::<BigEndian>())),
-			0xa7 => Instruction::Goto(try!(input.read_i16::<BigEndian>())),
-			0xb7 => Instruction::InvokeSpecial(try!(input.read_u16::<BigEndian>())),
+			0x84 => Instruction::Increment(read_u8(code, &mut i), read_u8(code, &mut i) as u32),
+			0x9f => Instruction::Compare(StackType::Integer, CompareType::EQ, relative_jump(ip, read_i16(code, &mut i))),
+			0xa0 => Instruction::Compare(StackType::Integer, CompareType::NE, relative_jump(ip, read_i16(code, &mut i))),
+			0xa1 => Instruction::Compare(StackType::Integer, CompareType::LT, relative_jump(ip, read_i16(code, &mut i))),
+			0xa2 => Instruction::Compare(StackType::Integer, CompareType::GE, relative_jump(ip, read_i16(code, &mut i))),
+			0xa3 => Instruction::Compare(StackType::Integer, CompareType::GT, relative_jump(ip, read_i16(code, &mut i))),
+			0xa4 => Instruction::Compare(StackType::Integer, CompareType::LE, relative_jump(ip, read_i16(code, &mut i))),
+			0xa5 => Instruction::Compare(StackType::Reference, CompareType::EQ, relative_jump(ip, read_i16(code, &mut i))),
+			0xa6 => Instruction::Compare(StackType::Reference, CompareType::NE, relative_jump(ip, read_i16(code, &mut i))),
+			0xa7 => Instruction::Goto(relative_jump(ip, read_i16(code, &mut i))),
+			0xb7 => Instruction::InvokeSpecial(read_u16(code, &mut i)),
 			0xb1 => Instruction::Return,
-			0xb2 => Instruction::GetStatic(try!(input.read_u16::<BigEndian>())),
-			0xb3 => Instruction::PutStatic(try!(input.read_u16::<BigEndian>())),
-			0xb5 => Instruction::PutField(try!(input.read_u16::<BigEndian>())),
-			0xb6 => Instruction::InvokeVirtual(try!(input.read_u16::<BigEndian>())),
-			0xbb => Instruction::New,
+			0xb2 => Instruction::GetStatic(read_u16(code, &mut i)),
+			0xb3 => Instruction::PutStatic(read_u16(code, &mut i)),
+			0xb5 => Instruction::PutField(read_u16(code, &mut i)),
+			0xb6 => Instruction::InvokeVirtual(read_u16(code, &mut i)),
+			0xbb => Instruction::New(read_u16(code, &mut i)),
 			0xbf => Instruction::Throw,
 			_ => return Err(parse_error(&format!("Unknown opcode: 0x{:x}", opcode)))
 		};
-		instructions.push(instruction);
 	}
 	Ok(instructions)
 }
@@ -311,8 +326,10 @@ fn parse_instructions(input: &mut Read, constants: &Vec<Constant>) -> Result<Vec
 fn parse_code(input: &mut Read, constants: &Vec<Constant>) -> Result<Code, Box<Error>> {
 	let max_stack = try!(input.read_u16::<BigEndian>());
 	let max_locals = try!(input.read_u16::<BigEndian>());
-	let code_length = try!(input.read_u32::<BigEndian>());
-	let instructions = try!(parse_instructions(&mut input.take(code_length as u64), constants));
+	let code_length = try!(input.read_u32::<BigEndian>()) as usize;
+	let mut code = vec![0; code_length];
+	try!(input.read_exact(&mut code));
+	let instructions = try!(parse_instructions(&code, constants));
 	let exception_table = try!(parse_list(input, constants, parse_exception_table_entry));
 	let mut stack_map_table = Vec::new();
 	try!(parse_attributes(input, constants, |name, value| {
@@ -519,10 +536,17 @@ fn dump_method(class: &ClassFile, method: &Method, delexer: &mut Delexer) {
 	match method.code {
 		Some(ref code) => { 
 			delexer.start_bracket();
+			let mut i = 0;
 			for instruction in &code.instructions {
-				delexer.token(&format!("{:?}", instruction));
-				delexer.separator(";");
-				delexer.end_line();
+				match *instruction {
+					Instruction::Nop => {},
+					_ => {
+						delexer.token(&format!("{:4}: {:?}", i, instruction));
+						delexer.separator(";");
+						delexer.end_line();
+					}
+				}
+				i+=1;
 			}
 			delexer.end_bracket();
 		},
