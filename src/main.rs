@@ -67,6 +67,16 @@ enum StackType {
 }
 
 #[derive(Debug)]
+enum CompareType {
+	EQ,
+	NE,
+	LT,
+	GE,
+	GT,
+	LE,
+}
+
+#[derive(Debug)]
 enum Instruction {
 	Nop,
 	IntegerConstant(u32),
@@ -75,11 +85,16 @@ enum Instruction {
 	Add(StackType),
 	Store(StackType, u8),
 	InvokeSpecial(u16),
+	InvokeVirtual(u16),
 	Return,
+	GetStatic(u16),
+	Dup,
+	New,
 	Throw,
 	Increment(u8, u32),
 	PutField(u16),
 	PutStatic(u16),
+	Compare(StackType, CompareType, i16),
 	Goto(i16),
 }
 
@@ -266,13 +281,25 @@ fn parse_instructions(input: &mut Read, constants: &Vec<Constant>) -> Result<Vec
 			0x4c => Instruction::Store(StackType::Reference, 1),
 			0x4d => Instruction::Store(StackType::Reference, 2),
 			0x4e => Instruction::Store(StackType::Reference, 3),
+			0x59 => Instruction::Dup,
 			0x60 => Instruction::Add(StackType::Integer),
 			0x84 => Instruction::Increment(try!(input.read_u8()), try!(input.read_u8()) as u32),
+			0x9f => Instruction::Compare(StackType::Integer, CompareType::EQ, try!(input.read_i16::<BigEndian>())),
+			0xa0 => Instruction::Compare(StackType::Integer, CompareType::NE, try!(input.read_i16::<BigEndian>())),
+			0xa1 => Instruction::Compare(StackType::Integer, CompareType::LT, try!(input.read_i16::<BigEndian>())),
+			0xa2 => Instruction::Compare(StackType::Integer, CompareType::GE, try!(input.read_i16::<BigEndian>())),
+			0xa3 => Instruction::Compare(StackType::Integer, CompareType::GT, try!(input.read_i16::<BigEndian>())),
+			0xa4 => Instruction::Compare(StackType::Integer, CompareType::LE, try!(input.read_i16::<BigEndian>())),
+			0xa5 => Instruction::Compare(StackType::Reference, CompareType::EQ, try!(input.read_i16::<BigEndian>())),
+			0xa6 => Instruction::Compare(StackType::Reference, CompareType::NE, try!(input.read_i16::<BigEndian>())),
 			0xa7 => Instruction::Goto(try!(input.read_i16::<BigEndian>())),
 			0xb7 => Instruction::InvokeSpecial(try!(input.read_u16::<BigEndian>())),
 			0xb1 => Instruction::Return,
+			0xb2 => Instruction::GetStatic(try!(input.read_u16::<BigEndian>())),
 			0xb3 => Instruction::PutStatic(try!(input.read_u16::<BigEndian>())),
 			0xb5 => Instruction::PutField(try!(input.read_u16::<BigEndian>())),
+			0xb6 => Instruction::InvokeVirtual(try!(input.read_u16::<BigEndian>())),
+			0xbb => Instruction::New,
 			0xbf => Instruction::Throw,
 			_ => return Err(parse_error(&format!("Unknown opcode: 0x{:x}", opcode)))
 		};
