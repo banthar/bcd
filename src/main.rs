@@ -147,11 +147,31 @@ enum Instruction {
 	MultiNewArray(u16, u8),
 }
 
+#[derive(Debug, Clone)]
+enum VerificationTypeInfo {
+	  Top,
+    Integer,
+    Float,
+    Long,
+    Double,
+    Null,
+    UninitializedThis,
+    Object(u16),
+    Uninitialized,
+}
+
+#[derive(Debug)]
+struct StackMapFrame {
+	offset: u32,
+	stack: Vec<VerificationTypeInfo>,
+	locals: Vec<VerificationTypeInfo>,
+}
+
 #[derive(Debug)]
 struct Code {
 	max_stack: u16,
 	max_locals: u16,
-	stack_map_table: Vec<u8>,
+	stack_map_table: Vec<StackMapFrame>,
 	instructions: Vec<Instruction>,
 	exception_table: Vec<ExceptionTableEntry>,
 }
@@ -554,6 +574,90 @@ fn parse_instructions(code: &[u8], constants: &Vec<Constant>) -> Result<Vec<Inst
 	Ok(instructions)
 }
 
+fn parse_verification_type_info(input: &mut Read) -> Result<VerificationTypeInfo, Box<Error>> {
+	let tag = try!(input.read_u8());
+	match tag {
+		0 => Ok(VerificationTypeInfo::Top),
+		1 => Ok(VerificationTypeInfo::Integer),
+		2 => Ok(VerificationTypeInfo::Float),
+		3 => Ok(VerificationTypeInfo::Long),
+		4 => Ok(VerificationTypeInfo::Double),
+		5 => Ok(VerificationTypeInfo::Null),
+		6 => Ok(VerificationTypeInfo::UninitializedThis),
+		7 => {
+			let class = try!(input.read_u16::<BigEndian>());
+			Ok(VerificationTypeInfo::Object(class))
+		},
+		8 => Ok(VerificationTypeInfo::Uninitialized),
+		_ => Err(parse_error(&format!("Unknown verification type tag: {}", tag))),
+	}
+}
+
+fn parse_stack_map_table(input: &mut Read) -> Result<Vec<StackMapFrame>, Box<Error>> {
+	let number_of_entries = try!(input.read_u16::<BigEndian>());
+	let mut offset = 0;
+	let mut stack = Vec::new();
+	let mut locals = Vec::new();
+	let stack_map_table = try!((0 .. number_of_entries).map(|_| {
+		let id = try!(input.read_u8());
+		match id {
+			0...63 => {
+				offset += id as u32;
+			},
+			64...127 => {
+				offset += (id - 64) as u32;
+				stack.clear();
+				stack.push(try!(parse_verification_type_info(input)));
+			},
+			247 => {
+				let offset_delta = try!(input.read_u16::<BigEndian>());
+				offset += offset_delta as u32;
+				stack.clear();
+				stack.push(try!(parse_verification_type_info(input)));
+			},
+			248...250 => {
+				let offset_delta = try!(input.read_u16::<BigEndian>());
+				offset += offset_delta as u32;
+				stack.clear();
+				let new_locals_size = locals.len() + 251 - id as usize;
+				locals.truncate(new_locals_size);
+			},
+			251 => {
+				let offset_delta = try!(input.read_u16::<BigEndian>());
+				offset += offset_delta as u32;
+			},
+			252...254 => {
+				let added_locals = id - 251;
+				let offset_delta = try!(input.read_u16::<BigEndian>());
+				offset += offset_delta as u32;
+				stack.clear();
+				for _ in 0 .. added_locals {
+					locals.push(try!(parse_verification_type_info(input)));
+				}
+			},
+			255 => {
+				let offset_delta = try!(input.read_u16::<BigEndian>());
+				offset += offset_delta as u32;
+				locals.clear();
+				let number_of_locals = try!(input.read_u16::<BigEndian>());
+				for _ in 0 .. number_of_locals {
+					locals.push(try!(parse_verification_type_info(input)));
+				}
+				stack.clear();
+				let number_of_stack_items = try!(input.read_u16::<BigEndian>());
+				for _ in 0 .. number_of_stack_items {
+					stack.push(try!(parse_verification_type_info(input)));
+				}
+			},
+			_ => return Err(parse_error(&format!("Unknown frame type: {}", id))),
+		};
+		let frame = StackMapFrame{offset: offset, locals: locals.clone(), stack: stack.clone()};
+		offset += 1;
+		Ok(frame)
+	}).collect());
+	return Ok(stack_map_table);
+}
+
 fn parse_code(input: &mut Read, constants: &Vec<Constant>) -> Result<Code, Box<Error>> {
 	let max_stack = try!(input.read_u16::<BigEndian>());
 	let max_locals = try!(input.read_u16::<BigEndian>());
@@ -571,9 +675,7 @@ fn parse_code(input: &mut Read, constants: &Vec<Constant>) -> Result<Code, Box<E
 				Ok(())
 			},
 			"StackMapTable" => {
-				let mut bytes = Vec::new();
-				try!(value.read_to_end(&mut bytes));
-				stack_map_table = bytes;
+				stack_map_table = try!(parse_stack_map_table(value));
 				Ok(())
 			},
 			_ => Err(parse_error(&format!("Unknown code attribute: {}", name)))
@@ -767,6 +869,8 @@ fn dump_method(class: &ClassFile, method: &Method, delexer: &mut Delexer) {
 	match method.code {
 		Some(ref code) => { 
 			delexer.start_bracket();
+			delexer.token(&format!("{:?};", code.stack_map_table));
+			delexer.end_line();
 			let mut i = 0;
 			for instruction in &code.instructions {
 				match *instruction {
