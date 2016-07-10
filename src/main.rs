@@ -5,6 +5,8 @@ use std::env;
 use std::fs::File;
 use std::io::{Read, ErrorKind};
 use byteorder::{BigEndian, ReadBytesExt};
+use std::iter::Peekable;
+use std::str::Chars;
 
 #[derive(Debug)]
 enum Constant {
@@ -149,16 +151,33 @@ enum Instruction {
 
 #[derive(Debug, Clone)]
 enum VerificationTypeInfo {
-	  Top,
-    Integer,
-    Float,
-    Long,
-    Double,
-    Null,
-    UninitializedThis,
-    Object(u16),
-    Uninitialized,
+  Top,
+  Integer,
+  Float,
+  Long,
+  Double,
+  Null,
+  UninitializedThis,
+  Object(u16),
+  Uninitialized,
 }
+
+#[derive(Debug, Clone)]
+enum FieldType {
+	Byte,
+	Character,
+	Double,
+	Float,
+	Integer,
+	Long,
+	Reference(String),
+	Short,
+	Boolean,
+	Array(Box<FieldType>),
+}
+
+#[derive(Debug)]
+struct MethodType(Vec<FieldType>, Option<FieldType>);
 
 #[derive(Debug)]
 struct StackMapFrame {
@@ -180,7 +199,8 @@ struct Code {
 struct Method {
 	access_flags: u16,
 	name_index: u16,
-	descriptor_index: u16,
+	descriptor: MethodType,
+	signature: Option<String>,
 	code: Option<Code>
 }
 
@@ -276,6 +296,56 @@ fn parse_constant(input: &mut Read) -> Result<Constant, Box<Error>> {
 	}
 }
 
+fn parse_field_type(input: &mut Peekable<Chars>) -> Result<FieldType, Box<Error>> {
+	match input.next() {
+		Some(c) => 	match c {
+			'B' => Ok(FieldType::Byte),
+			'C' => Ok(FieldType::Character),
+			'D' => Ok(FieldType::Double),
+			'F' => Ok(FieldType::Float),
+			'I' => Ok(FieldType::Integer),
+			'J' => Ok(FieldType::Long),
+			'L' => {
+				let type_name = input.take_while(|&c| c!=';').collect();
+				Ok(FieldType::Reference(type_name))
+			},
+			'S' => Ok(FieldType::Short),
+			'Z' => Ok(FieldType::Boolean),
+			'[' => Ok(FieldType::Array(Box::new(try!(parse_field_type(input))))),
+			_ => Err(parse_error(&format!("Unknown type: {}", c))),
+		},
+		None => 	Err(parse_error("Unexpected end of type signature")),
+	}
+}
+
+fn parse_method_descriptor(input: &str) -> Result<MethodType, Box<Error>> {
+	let mut i = input.chars().peekable();
+
+	match i.next() {
+		Some('(') => {},
+		_ => return Err(parse_error(&format!("Method signature should start with '(': {}", input))),
+	}
+	let mut parameters = vec![];
+	loop {
+		match i.peek() {
+			Some(&')') => {
+				i.next();
+				break
+			}
+			_ => parameters.push(try!(parse_field_type(&mut i))),
+		}
+	}
+	let return_type = match i.peek() {
+		Some(&'V') => {
+			i.next();
+			None
+		}
+		_ => Some(try!(parse_field_type(&mut i)))
+	};
+	Ok(MethodType(parameters, return_type))
+}
+
+
 fn parse_field(input: &mut Read, constants: &Vec<Constant>) -> Result<Field, Box<Error>> {
 	let access_flags = try!(input.read_u16::<BigEndian>());
 	let name_index = try!(input.read_u16::<BigEndian>());
@@ -289,9 +359,8 @@ fn parse_field(input: &mut Read, constants: &Vec<Constant>) -> Result<Field, Box
 				Ok(())
 			},
 			"Signature" => {
-				let mut s = String::new();
-				try!(value.read_to_string(&mut s));
-				signature = Some(s);
+				let signature_index = try!(value.read_u16::<BigEndian>());
+				signature = Some(get_string_constant(constants, signature_index));
 				Ok(())
 			},
 			_ => Err(parse_error(&format!("Unknown field attribute: {}", name)))
@@ -694,18 +763,24 @@ fn parse_code(input: &mut Read, constants: &Vec<Constant>) -> Result<Code, Box<E
 fn parse_method(input: &mut Read, constants: &Vec<Constant>) -> Result<Method, Box<Error>> {
 	let access_flags = try!(input.read_u16::<BigEndian>());
 	let name_index = try!(input.read_u16::<BigEndian>());
-	let descriptor_index = try!(input.read_u16::<BigEndian>());
+	let descriptor = try!(parse_method_descriptor(get_string_constant(constants, try!(input.read_u16::<BigEndian>()))));
 	let mut code = None;
+	let mut signature = None;
 	try!(parse_attributes(input, constants, |name, value| {
 		match name {
 			"Code" => {
 				code = Some(try!(parse_code(value, constants)));
 				Ok(())
 			},
+			"Signature" => {
+				let signature_index = try!(value.read_u16::<BigEndian>());
+				signature = Some(get_string_constant(constants, signature_index).to_string());
+				Ok(())
+			},
 			_ => Err(parse_error(&format!("Unknown method attribute: {}", name)))
 		}
 	}));
-	Ok(Method{access_flags: access_flags, name_index: name_index, descriptor_index: descriptor_index, code: code})
+	Ok(Method{access_flags: access_flags, name_index: name_index, descriptor: descriptor, signature: signature, code: code})
 }
 
 fn parse_attributes<F>(input: &mut Read, constants: &Vec<Constant>, mut f : F) -> Result<(), Box<Error>> where 
@@ -861,17 +936,21 @@ fn dump_field(class: &ClassFile, field: &Field, delexer: &mut Delexer) {
 }
 
 fn dump_method(class: &ClassFile, method: &Method, delexer: &mut Delexer) {
+	if let Some(ref signature) = method.signature {
+		delexer.token(&format!("// signature: {}", signature));
+		delexer.end_line();
+	}
 	if method.access_flags & 0x0001 == 0x0001 {
 		delexer.token("public");
 	}
-	delexer.token(get_string_constant(&class.constant_pool, method.descriptor_index));
+	delexer.token(&format!("{:?}", method.descriptor));
 	delexer.token(get_string_constant(&class.constant_pool, method.name_index));
 	match method.code {
 		Some(ref code) => { 
 			delexer.start_bracket();
-			delexer.token(&format!("{:?};", code.stack_map_table));
+			delexer.token(&format!("// stack_map_table: {:?};", code.stack_map_table));
 			delexer.end_line();
-			delexer.token(&format!("{:?};", code.exception_table));
+			delexer.token(&format!("// exception_table: {:?};", code.exception_table));
 			delexer.end_line();
 			let mut i = 0;
 			for instruction in &code.instructions {
