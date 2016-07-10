@@ -200,6 +200,7 @@ struct Code {
 struct Method {
 	access_flags: u16,
 	name_index: u16,
+	exceptions: Vec<String>,
 	descriptor: MethodType,
 	signature: Option<String>,
 	code: Option<Code>
@@ -767,6 +768,7 @@ fn parse_method(input: &mut Read, constants: &Vec<Constant>) -> Result<Method, B
 	let descriptor = try!(parse_method_descriptor(get_string_constant(constants, try!(input.read_u16::<BigEndian>()))));
 	let mut code = None;
 	let mut signature = None;
+	let mut exceptions = vec![];
 	try!(parse_attributes(input, constants, |name, value| {
 		match name {
 			"Code" => {
@@ -778,10 +780,19 @@ fn parse_method(input: &mut Read, constants: &Vec<Constant>) -> Result<Method, B
 				signature = Some(get_string_constant(constants, signature_index).to_string());
 				Ok(())
 			},
+			"Exceptions" => {
+				let number_of_exceptions = try!(value.read_u16::<BigEndian>());
+				for _ in 0 .. number_of_exceptions {
+					let exception_id = try!(value.read_u16::<BigEndian>());
+					let exception = get_class_constant(constants, exception_id).to_string();
+					exceptions.push(exception);
+				}
+				Ok(())
+			},
 			_ => Err(parse_error(&format!("Unknown method attribute: {}", name)))
 		}
 	}));
-	Ok(Method{access_flags: access_flags, name_index: name_index, descriptor: descriptor, signature: signature, code: code})
+	Ok(Method{access_flags: access_flags, name_index: name_index, descriptor: descriptor, signature: signature, exceptions: exceptions, code: code})
 }
 
 fn parse_attributes<F>(input: &mut Read, constants: &Vec<Constant>, mut f : F) -> Result<(), Box<Error>> where 
@@ -950,6 +961,7 @@ fn dump_method(class: &ClassFile, method: &Method, delexer: &mut Delexer) {
 	}
 	delexer.token(&format!("{:?}", method.descriptor));
 	delexer.token(get_string_constant(&class.constant_pool, method.name_index));
+	delexer.token(&format!("{:?}", method.exceptions));
 	match method.code {
 		Some(ref code) => { 
 			delexer.start_bracket();
