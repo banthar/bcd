@@ -47,7 +47,8 @@ fn get_class_constant(constants: &Vec<Constant>, id: u16) -> &str {
 struct Field {
 	access_flags: u16,
 	name_index: u16,
-	descriptor_index: u16,
+	descriptor: FieldType,
+	signature: Option<String>,
 	constant_value: Option<u16>,
 }
 
@@ -349,7 +350,7 @@ fn parse_method_descriptor(input: &str) -> Result<MethodType, Box<Error>> {
 fn parse_field(input: &mut Read, constants: &Vec<Constant>) -> Result<Field, Box<Error>> {
 	let access_flags = try!(input.read_u16::<BigEndian>());
 	let name_index = try!(input.read_u16::<BigEndian>());
-	let descriptor_index = try!(input.read_u16::<BigEndian>());
+	let descriptor = try!(parse_field_type(&mut get_string_constant(constants, try!(input.read_u16::<BigEndian>())).chars().peekable()));
 	let mut constant_value = None;
 	let mut signature = None;
 	try!(parse_attributes(input, constants, |name, value| {
@@ -360,13 +361,13 @@ fn parse_field(input: &mut Read, constants: &Vec<Constant>) -> Result<Field, Box
 			},
 			"Signature" => {
 				let signature_index = try!(value.read_u16::<BigEndian>());
-				signature = Some(get_string_constant(constants, signature_index));
+				signature = Some(get_string_constant(constants, signature_index).to_string());
 				Ok(())
 			},
 			_ => Err(parse_error(&format!("Unknown field attribute: {}", name)))
 		}
 	}));
-	Ok(Field{access_flags: access_flags, name_index: name_index, descriptor_index: descriptor_index, constant_value: constant_value})
+	Ok(Field{access_flags: access_flags, name_index: name_index, descriptor: descriptor, signature: signature, constant_value: constant_value})
 }
 
 fn parse_exception_table_entry(input: &mut Read, _: &Vec<Constant>) -> Result<ExceptionTableEntry, Box<Error>> {
@@ -900,6 +901,10 @@ impl Delexer {
 }
 
 fn dump_field(class: &ClassFile, field: &Field, delexer: &mut Delexer) {
+	if let Some(ref signature) = field.signature {
+		delexer.token(&format!("// signature: {}", signature));
+		delexer.end_line();
+	}
 	if field.access_flags & 0x0001 == 0x0001 {
 		delexer.token("public");
 	}
@@ -921,7 +926,7 @@ fn dump_field(class: &ClassFile, field: &Field, delexer: &mut Delexer) {
 	if field.access_flags & 0x0080 == 0x0080 {
 		delexer.token("transient");
 	}
-	delexer.token(get_string_constant(&class.constant_pool, field.descriptor_index));
+	delexer.token(&format!("{:?}", field.descriptor));
 	delexer.token(get_string_constant(&class.constant_pool, field.name_index));
 
 	match field.constant_value {
