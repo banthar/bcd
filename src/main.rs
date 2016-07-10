@@ -7,6 +7,7 @@ use std::io::{Read, ErrorKind};
 use byteorder::{BigEndian, ReadBytesExt};
 use std::iter::Peekable;
 use std::str::Chars;
+use std::collections::{BTreeSet, BTreeMap};
 
 #[derive(Debug)]
 enum Constant {
@@ -159,7 +160,7 @@ enum VerificationTypeInfo {
   Double,
   Null,
   UninitializedThis,
-  Object(u16),
+  Object(String),
   Uninitialized,
 }
 
@@ -192,7 +193,7 @@ struct Code {
 	max_stack: u16,
 	max_locals: u16,
 	stack_map_table: Vec<StackMapFrame>,
-	instructions: Vec<Instruction>,
+	instructions: BTreeMap<usize, Vec<Instruction>>,
 	exception_table: Vec<ExceptionTableEntry>,
 }
 
@@ -295,6 +296,21 @@ fn parse_constant(input: &mut Read) -> Result<Constant, Box<Error>> {
 			Err(parse_error(&format!("Unsupported constant type: {:?}", Constant::InvokeDynamic)))
 		}
 		_ => Err(parse_error(&format!("Unsupported constant type: {}", tag)))
+	}
+}
+
+fn field_type_to_stack_type(field_type: &FieldType) -> VerificationTypeInfo {
+	match field_type {
+		&FieldType::Byte => VerificationTypeInfo::Integer,
+		&FieldType::Character => VerificationTypeInfo::Integer,
+		&FieldType::Double => VerificationTypeInfo::Double,
+		&FieldType::Float => VerificationTypeInfo::Float,
+		&FieldType::Integer => VerificationTypeInfo::Integer,
+		&FieldType::Long => VerificationTypeInfo::Long,
+		&FieldType::Reference(ref name) => VerificationTypeInfo::Object(name.clone()),
+		&FieldType::Short => VerificationTypeInfo::Integer,
+		&FieldType::Boolean => VerificationTypeInfo::Integer,
+		&FieldType::Array(ref elementType) => VerificationTypeInfo::Object(format!("[{:?}", elementType)),
 	}
 }
 
@@ -645,7 +661,7 @@ fn parse_instructions(code: &[u8], constants: &Vec<Constant>) -> Result<Vec<Inst
 	Ok(instructions)
 }
 
-fn parse_verification_type_info(input: &mut Read) -> Result<VerificationTypeInfo, Box<Error>> {
+fn parse_verification_type_info(input: &mut Read, constants: &Vec<Constant>) -> Result<VerificationTypeInfo, Box<Error>> {
 	let tag = try!(input.read_u8());
 	match tag {
 		0 => Ok(VerificationTypeInfo::Top),
@@ -656,20 +672,20 @@ fn parse_verification_type_info(input: &mut Read) -> Result<VerificationTypeInfo
 		5 => Ok(VerificationTypeInfo::Null),
 		6 => Ok(VerificationTypeInfo::UninitializedThis),
 		7 => {
-			let class = try!(input.read_u16::<BigEndian>());
-			Ok(VerificationTypeInfo::Object(class))
+			let class_id = try!(input.read_u16::<BigEndian>());
+			Ok(VerificationTypeInfo::Object(get_class_constant(constants, class_id).to_string()))
 		},
 		8 => Ok(VerificationTypeInfo::Uninitialized),
 		_ => Err(parse_error(&format!("Unknown verification type tag: {}", tag))),
 	}
 }
 
-fn parse_stack_map_table(input: &mut Read) -> Result<Vec<StackMapFrame>, Box<Error>> {
+fn parse_stack_map_table(input: &mut Read, stack_map_table: &mut Vec<StackMapFrame>, constants: &Vec<Constant>) -> Result<(), Box<Error>> {
 	let number_of_entries = try!(input.read_u16::<BigEndian>());
 	let mut offset = 0;
 	let mut stack = Vec::new();
 	let mut locals = Vec::new();
-	let stack_map_table = try!((0 .. number_of_entries).map(|_| {
+	for _ in 0 .. number_of_entries {
 		let id = try!(input.read_u8());
 		match id {
 			0...63 => {
@@ -678,13 +694,13 @@ fn parse_stack_map_table(input: &mut Read) -> Result<Vec<StackMapFrame>, Box<Err
 			64...127 => {
 				offset += (id - 64) as u32;
 				stack.clear();
-				stack.push(try!(parse_verification_type_info(input)));
+				stack.push(try!(parse_verification_type_info(input, constants)));
 			},
 			247 => {
 				let offset_delta = try!(input.read_u16::<BigEndian>());
 				offset += offset_delta as u32;
 				stack.clear();
-				stack.push(try!(parse_verification_type_info(input)));
+				stack.push(try!(parse_verification_type_info(input, constants)));
 			},
 			248...250 => {
 				let offset_delta = try!(input.read_u16::<BigEndian>());
@@ -703,7 +719,7 @@ fn parse_stack_map_table(input: &mut Read) -> Result<Vec<StackMapFrame>, Box<Err
 				offset += offset_delta as u32;
 				stack.clear();
 				for _ in 0 .. added_locals {
-					locals.push(try!(parse_verification_type_info(input)));
+					locals.push(try!(parse_verification_type_info(input, constants)));
 				}
 			},
 			255 => {
@@ -712,32 +728,65 @@ fn parse_stack_map_table(input: &mut Read) -> Result<Vec<StackMapFrame>, Box<Err
 				locals.clear();
 				let number_of_locals = try!(input.read_u16::<BigEndian>());
 				for _ in 0 .. number_of_locals {
-					locals.push(try!(parse_verification_type_info(input)));
+					locals.push(try!(parse_verification_type_info(input, constants)));
 				}
 				stack.clear();
 				let number_of_stack_items = try!(input.read_u16::<BigEndian>());
 				for _ in 0 .. number_of_stack_items {
-					stack.push(try!(parse_verification_type_info(input)));
+					stack.push(try!(parse_verification_type_info(input, constants)));
 				}
 			},
 			_ => return Err(parse_error(&format!("Unknown frame type: {}", id))),
 		};
 		let frame = StackMapFrame{offset: offset, locals: locals.clone(), stack: stack.clone()};
 		offset += 1;
-		Ok(frame)
-	}).collect());
-	return Ok(stack_map_table);
+		stack_map_table.push(frame)
+	}
+	return Ok(());
 }
 
-fn parse_code(input: &mut Read, constants: &Vec<Constant>) -> Result<Code, Box<Error>> {
+fn get_basic_block_offsets(instructions: &Vec<Instruction>, stack_map_table: &Vec<StackMapFrame>, exception_table: &Vec<ExceptionTableEntry>) -> BTreeSet<usize> {
+	let mut basic_blocks_offsets = BTreeSet::new();
+	let mut cut = true;
+	for (pc, instruction) in instructions.iter().enumerate() {
+		
+		match instruction {
+			&Instruction::Nop => {
+			},
+			_ if cut => {
+				basic_blocks_offsets.insert(pc);
+				cut = false;
+			},
+			&Instruction::Goto(offset) |
+			&Instruction::IfCompare(_, _, offset) |
+			&Instruction::IfCompareZero(_, _, offset)  => {
+				basic_blocks_offsets.insert(offset);
+				cut = true;
+			},
+			_ => {
+			},
+		}
+	}
+
+	for e in exception_table {
+		basic_blocks_offsets.insert(e.start_pc as usize);
+		basic_blocks_offsets.insert(e.end_pc as usize);
+		basic_blocks_offsets.insert(e.handler_pc as usize);
+	}
+
+	basic_blocks_offsets
+}
+
+fn parse_code(input: &mut Read, constants: &Vec<Constant>, signature: &MethodType) -> Result<Code, Box<Error>> {
 	let max_stack = try!(input.read_u16::<BigEndian>());
 	let max_locals = try!(input.read_u16::<BigEndian>());
 	let code_length = try!(input.read_u32::<BigEndian>()) as usize;
 	let mut code = vec![0; code_length];
 	try!(input.read_exact(&mut code));
-	let instructions = try!(parse_instructions(&code, constants));
+	let mut instructions = try!(parse_instructions(&code, constants));
 	let exception_table = try!(parse_list(input, constants, parse_exception_table_entry));
-	let mut stack_map_table = Vec::new();
+	let initial_stack = signature.0.iter().map(field_type_to_stack_type).collect();
+	let mut stack_map_table = vec![StackMapFrame{offset: 0, locals: initial_stack, stack: vec![]}];
 	try!(parse_attributes(input, constants, |name, value| {
 		match name {
 			"LineNumberTable" => {
@@ -746,17 +795,24 @@ fn parse_code(input: &mut Read, constants: &Vec<Constant>) -> Result<Code, Box<E
 				Ok(())
 			},
 			"StackMapTable" => {
-				stack_map_table = try!(parse_stack_map_table(value));
+				try!(parse_stack_map_table(value, &mut stack_map_table, constants));
 				Ok(())
 			},
 			_ => Err(parse_error(&format!("Unknown code attribute: {}", name)))
 		}
 	}));
+
+	let basic_block_offsets = get_basic_block_offsets(&instructions, &stack_map_table, &exception_table);
+	let mut basic_blocks = BTreeMap::new();
+	for offset in basic_block_offsets.iter().rev() {
+		basic_blocks.insert(*offset, instructions.split_off(*offset));
+	}
+
 	Ok(Code{
 		max_stack: max_stack,
 		max_locals: max_locals,
 		stack_map_table: stack_map_table,
-		instructions: instructions,
+		instructions: basic_blocks,
 		exception_table: exception_table,
 	})
 }
@@ -772,7 +828,7 @@ fn parse_method(input: &mut Read, constants: &Vec<Constant>) -> Result<Method, B
 	try!(parse_attributes(input, constants, |name, value| {
 		match name {
 			"Code" => {
-				code = Some(try!(parse_code(value, constants)));
+				code = Some(try!(parse_code(value, constants, &descriptor)));
 				Ok(())
 			},
 			"Signature" => {
@@ -969,17 +1025,19 @@ fn dump_method(class: &ClassFile, method: &Method, delexer: &mut Delexer) {
 			delexer.end_line();
 			delexer.token(&format!("// exception_table: {:?};", code.exception_table));
 			delexer.end_line();
-			let mut i = 0;
-			for instruction in &code.instructions {
-				match *instruction {
-					Instruction::Nop => {},
-					_ => {
-						delexer.token(&format!("{:4}: {:?}", i, instruction));
-						delexer.separator(";");
-						delexer.end_line();
+			for (offset, block) in &code.instructions {
+				delexer.token(&format!("{:4}:", offset));
+				delexer.end_line();
+				for instruction in block {
+					match *instruction {
+						Instruction::Nop => {},
+						_ => {
+							delexer.token(&format!("      {:?}", instruction));
+							delexer.separator(";");
+							delexer.end_line();
+						}
 					}
 				}
-				i+=1;
 			}
 			delexer.end_bracket();
 		},
