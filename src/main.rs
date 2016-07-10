@@ -98,8 +98,8 @@ enum Instruction {
 	ArrayLoad(StackType),
 	ArrayStore(StackType),
 	LoadConstant(u16),
-	Load(StackType, u8),
-	Store(StackType, u8),
+	Load(StackType, u16),
+	Store(StackType, u16),
 	ReturnVoid,
 	Return(StackType),
 	GetStatic(u16),
@@ -124,7 +124,7 @@ enum Instruction {
 	BitwiseXor(StackType),
 	New(u16),
 	Throw,
-	Increment(u8, u32),
+	Increment(u16, i32),
 	Convert(StackType, StackType),
 	GetField(u16),
 	PutField(u16),
@@ -137,6 +137,14 @@ enum Instruction {
 	IfCompareZero(StackType, CompareType, usize),
 	IfCompare(StackType, CompareType, usize),
 	Goto(usize),
+	NewArray(u8),
+	NewReferenceArray(u16),
+	CheckCast(u16),
+	InstanceOf(u16),
+	MonitorEnter,
+	MonitorExit,
+	ArrayLength,
+	MultiNewArray(u16, u8),
 }
 
 #[derive(Debug)]
@@ -295,11 +303,26 @@ fn read_u16(bytes: &[u8], position: &mut usize) -> u16 {
 	(read_u8(bytes, position) as u16) << 8u16 | (read_u8(bytes, position) as u16)
 }
 
+fn read_u32(bytes: &[u8], position: &mut usize) -> u32 {
+	(read_u8(bytes, position) as u32) << 24u16 |
+	(read_u8(bytes, position) as u32) << 16u16 |
+	(read_u8(bytes, position) as u32) << 8u16 |
+	(read_u8(bytes, position) as u32)
+}
+
+fn read_i8(bytes: &[u8], position: &mut usize) -> i8 {
+	read_u8(bytes, position) as i8
+}
+
 fn read_i16(bytes: &[u8], position: &mut usize) -> i16 {
 	read_u16(bytes, position) as i16
 }
 
-fn relative_jump(ip:usize, offset:i16) -> usize {
+fn read_i32(bytes: &[u8], position: &mut usize) -> i32 {
+	read_u32(bytes, position) as i32
+}
+
+fn relative_jump(ip:usize, offset:i32) -> usize {
 	((ip as i64) + (offset as i64)) as usize
 }
 
@@ -331,11 +354,11 @@ fn parse_instructions(code: &[u8], constants: &Vec<Constant>) -> Result<Vec<Inst
 			0x12 => Instruction::LoadConstant(read_u8(code, &mut i) as u16),
 			0x13 => Instruction::LoadConstant(read_u16(code, &mut i) as u16),
 			0x14 => Instruction::LoadConstant(read_u16(code, &mut i) as u16),
-			0x15 => Instruction::Load(StackType::Integer, read_u8(code, &mut i)),
-			0x16 => Instruction::Load(StackType::Long, read_u8(code, &mut i)),
-			0x17 => Instruction::Load(StackType::Float, read_u8(code, &mut i)),
-			0x18 => Instruction::Load(StackType::Double, read_u8(code, &mut i)),
-			0x19 => Instruction::Load(StackType::Reference, read_u8(code, &mut i)),
+			0x15 => Instruction::Load(StackType::Integer, read_u8(code, &mut i) as u16),
+			0x16 => Instruction::Load(StackType::Long, read_u8(code, &mut i) as u16),
+			0x17 => Instruction::Load(StackType::Float, read_u8(code, &mut i) as u16),
+			0x18 => Instruction::Load(StackType::Double, read_u8(code, &mut i) as u16),
+			0x19 => Instruction::Load(StackType::Reference, read_u8(code, &mut i) as u16),
 			0x1a => Instruction::Load(StackType::Integer, 0),
 			0x1b => Instruction::Load(StackType::Integer, 1),
 			0x1c => Instruction::Load(StackType::Integer, 2),
@@ -364,11 +387,11 @@ fn parse_instructions(code: &[u8], constants: &Vec<Constant>) -> Result<Vec<Inst
 			0x33 => Instruction::ArrayLoad(StackType::Boolean),
 			0x34 => Instruction::ArrayLoad(StackType::Character),
 			0x35 => Instruction::ArrayLoad(StackType::Short),
-			0x36 => Instruction::Store(StackType::Integer, read_u8(code, &mut i)),
-			0x37 => Instruction::Store(StackType::Long, read_u8(code, &mut i)),
-			0x38 => Instruction::Store(StackType::Float, read_u8(code, &mut i)),
-			0x39 => Instruction::Store(StackType::Double, read_u8(code, &mut i)),
-			0x3a => Instruction::Store(StackType::Reference, read_u8(code, &mut i)),
+			0x36 => Instruction::Store(StackType::Integer, read_u8(code, &mut i) as u16),
+			0x37 => Instruction::Store(StackType::Long, read_u8(code, &mut i) as u16),
+			0x38 => Instruction::Store(StackType::Float, read_u8(code, &mut i) as u16),
+			0x39 => Instruction::Store(StackType::Double, read_u8(code, &mut i) as u16),
+			0x3a => Instruction::Store(StackType::Reference, read_u8(code, &mut i) as u16),
 			0x3b => Instruction::Store(StackType::Integer, 0),
 			0x3c => Instruction::Store(StackType::Integer, 1),
 			0x3d => Instruction::Store(StackType::Integer, 2),
@@ -442,7 +465,7 @@ fn parse_instructions(code: &[u8], constants: &Vec<Constant>) -> Result<Vec<Inst
 			0x81 => Instruction::BitwiseOr(StackType::Long),
 			0x82 => Instruction::BitwiseXor(StackType::Integer),
 			0x83 => Instruction::BitwiseXor(StackType::Long),
-			0x84 => Instruction::Increment(read_u8(code, &mut i), read_u8(code, &mut i) as u32),
+			0x84 => Instruction::Increment(read_u8(code, &mut i) as u16, read_i8(code, &mut i) as i32),
 			0x85 => Instruction::Convert(StackType::Integer, StackType::Long),
 			0x86 => Instruction::Convert(StackType::Integer, StackType::Float),
 			0x87 => Instruction::Convert(StackType::Integer, StackType::Double),
@@ -463,21 +486,21 @@ fn parse_instructions(code: &[u8], constants: &Vec<Constant>) -> Result<Vec<Inst
 			0x96 => Instruction::Compare(StackType::Float),
 			0x97 => Instruction::Compare(StackType::Double),
 			0x98 => Instruction::Compare(StackType::Double),
-			0x99 => Instruction::IfCompareZero(StackType::Integer, CompareType::EQ, relative_jump(ip, read_i16(code, &mut i))),
-			0x9a => Instruction::IfCompareZero(StackType::Integer, CompareType::NE, relative_jump(ip, read_i16(code, &mut i))),
-			0x9b => Instruction::IfCompareZero(StackType::Integer, CompareType::LT, relative_jump(ip, read_i16(code, &mut i))),
-			0x9c => Instruction::IfCompareZero(StackType::Integer, CompareType::GE, relative_jump(ip, read_i16(code, &mut i))),
-			0x9d => Instruction::IfCompareZero(StackType::Integer, CompareType::GT, relative_jump(ip, read_i16(code, &mut i))),
-			0x9e => Instruction::IfCompareZero(StackType::Integer, CompareType::LE, relative_jump(ip, read_i16(code, &mut i))),
-			0x9f => Instruction::IfCompare(StackType::Integer, CompareType::EQ, relative_jump(ip, read_i16(code, &mut i))),
-			0xa0 => Instruction::IfCompare(StackType::Integer, CompareType::NE, relative_jump(ip, read_i16(code, &mut i))),
-			0xa1 => Instruction::IfCompare(StackType::Integer, CompareType::LT, relative_jump(ip, read_i16(code, &mut i))),
-			0xa2 => Instruction::IfCompare(StackType::Integer, CompareType::GE, relative_jump(ip, read_i16(code, &mut i))),
-			0xa3 => Instruction::IfCompare(StackType::Integer, CompareType::GT, relative_jump(ip, read_i16(code, &mut i))),
-			0xa4 => Instruction::IfCompare(StackType::Integer, CompareType::LE, relative_jump(ip, read_i16(code, &mut i))),
-			0xa5 => Instruction::IfCompare(StackType::Reference, CompareType::EQ, relative_jump(ip, read_i16(code, &mut i))),
-			0xa6 => Instruction::IfCompare(StackType::Reference, CompareType::NE, relative_jump(ip, read_i16(code, &mut i))),
-			0xa7 => Instruction::Goto(relative_jump(ip, read_i16(code, &mut i))),
+			0x99 => Instruction::IfCompareZero(StackType::Integer, CompareType::EQ, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0x9a => Instruction::IfCompareZero(StackType::Integer, CompareType::NE, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0x9b => Instruction::IfCompareZero(StackType::Integer, CompareType::LT, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0x9c => Instruction::IfCompareZero(StackType::Integer, CompareType::GE, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0x9d => Instruction::IfCompareZero(StackType::Integer, CompareType::GT, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0x9e => Instruction::IfCompareZero(StackType::Integer, CompareType::LE, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0x9f => Instruction::IfCompare(StackType::Integer, CompareType::EQ, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0xa0 => Instruction::IfCompare(StackType::Integer, CompareType::NE, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0xa1 => Instruction::IfCompare(StackType::Integer, CompareType::LT, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0xa2 => Instruction::IfCompare(StackType::Integer, CompareType::GE, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0xa3 => Instruction::IfCompare(StackType::Integer, CompareType::GT, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0xa4 => Instruction::IfCompare(StackType::Integer, CompareType::LE, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0xa5 => Instruction::IfCompare(StackType::Reference, CompareType::EQ, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0xa6 => Instruction::IfCompare(StackType::Reference, CompareType::NE, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0xa7 => Instruction::Goto(relative_jump(ip, read_i16(code, &mut i) as i32)),
 
 			0xac => Instruction::Return(StackType::Integer),
 			0xad => Instruction::Return(StackType::Long),
@@ -495,7 +518,35 @@ fn parse_instructions(code: &[u8], constants: &Vec<Constant>) -> Result<Vec<Inst
 			0xb9 => Instruction::InvokeInterface(read_u16(code, &mut i)),
 
 			0xbb => Instruction::New(read_u16(code, &mut i)),
+			0xbc => Instruction::NewArray(read_u8(code, &mut i)),
+			0xbd => Instruction::NewReferenceArray(read_u16(code, &mut i)),
+			0xbe => Instruction::ArrayLength,
 			0xbf => Instruction::Throw,
+			0xc0 => Instruction::CheckCast(read_u16(code, &mut i)),
+			0xc1 => Instruction::InstanceOf(read_u16(code, &mut i)),
+			0xc2 => Instruction::MonitorEnter,
+			0xc3 => Instruction::MonitorExit,
+			0xc4 => match read_u8(code, &mut i) {
+				0x15 => Instruction::Load(StackType::Integer, read_u16(code, &mut i)),
+				0x16 => Instruction::Load(StackType::Long, read_u16(code, &mut i)),
+				0x17 => Instruction::Load(StackType::Float, read_u16(code, &mut i)),
+				0x18 => Instruction::Load(StackType::Double, read_u16(code, &mut i)),
+				0x19 => Instruction::Load(StackType::Reference, read_u16(code, &mut i)),
+				0x36 => Instruction::Store(StackType::Integer, read_u16(code, &mut i)),
+				0x37 => Instruction::Store(StackType::Long, read_u16(code, &mut i)),
+				0x38 => Instruction::Store(StackType::Float, read_u16(code, &mut i)),
+				0x39 => Instruction::Store(StackType::Double, read_u16(code, &mut i)),
+				0x3a => Instruction::Store(StackType::Reference, read_u16(code, &mut i)),
+				0x84 => Instruction::Increment(read_u16(code, &mut i), read_i16(code, &mut i) as i32),
+				_ => panic!("Unknown wide opcode"),
+			},
+			0xc5 => Instruction::MultiNewArray(read_u16(code, &mut i), read_u8(code, &mut i)),
+
+			0xc6 => Instruction::IfCompareZero(StackType::Reference, CompareType::EQ, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0xc7 => Instruction::IfCompareZero(StackType::Reference, CompareType::NE, relative_jump(ip, read_i16(code, &mut i) as i32)),
+
+			0xc8 => Instruction::Goto(relative_jump(ip, read_i32(code, &mut i))),
+
 
 			_ => return Err(parse_error(&format!("Unknown opcode: 0x{:x}", opcode)))
 		};
