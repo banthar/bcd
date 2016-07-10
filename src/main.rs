@@ -871,6 +871,8 @@ fn dump_method(class: &ClassFile, method: &Method, delexer: &mut Delexer) {
 			delexer.start_bracket();
 			delexer.token(&format!("{:?};", code.stack_map_table));
 			delexer.end_line();
+			delexer.token(&format!("{:?};", code.exception_table));
+			delexer.end_line();
 			let mut i = 0;
 			for instruction in &code.instructions {
 				match *instruction {
