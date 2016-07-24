@@ -7,7 +7,7 @@ use std::io::{Read, ErrorKind};
 use byteorder::{BigEndian, ReadBytesExt};
 use std::iter::Peekable;
 use std::str::Chars;
-use std::collections::{BTreeSet, BTreeMap};
+use std::collections::BTreeMap;
 
 #[derive(Debug)]
 enum Constant {
@@ -74,6 +74,8 @@ enum StackType {
 	Reference,
 }
 
+impl Copy for StackType {}
+
 #[derive(Debug,Clone)]
 enum CompareType {
 	EQ,
@@ -85,10 +87,18 @@ enum CompareType {
 }
 
 #[derive(Debug,Clone)]
-enum ShiftType {
-	Left,
-	RightArithmetic,
-	RightLogical,
+enum BinaryOperation {
+	Add,
+	Subtract,
+	Multiply,
+	Divide,
+	Remainder,
+	LeftShift,
+	RightArithmeticShift,
+	RightLogicalShift,
+	BitwiseAnd,
+	BitwiseOr,
+	BitwiseXor,
 }
 
 #[derive(Debug,Clone)]
@@ -99,37 +109,16 @@ enum Instruction {
 	FloatConstant(f32),
 	DoubleConstant(f64),
 	NullConstant,
-	ArrayLoad(StackType),
-	ArrayStore(StackType),
-	LoadConstant(u16),
-	Load(StackType, u16),
-	Store(StackType, u16),
+	ArrayLoad(StackType, usize, usize),
+	ArrayStore(StackType, usize, usize, usize),
 	ReturnVoid,
-	Return(StackType),
+	Return(StackType, usize),
 	GetStatic(u16),
-	Pop,
-	Pop2,
-	Dup,
-	DupX1,
-	DupX2,
-	Dup2,
-	Dup2X1,
-	Dup2X2,
-	Swap,
-	Add(StackType),
-	Subtract(StackType),
-	Multiply(StackType),
-	Divide(StackType),
-	Remainder(StackType),
-	Negate(StackType),
-	Shift(ShiftType, StackType),
-	BitwiseAnd(StackType),
-	BitwiseOr(StackType),
-	BitwiseXor(StackType),
+	BinaryOperation(StackType, BinaryOperation, usize, usize),
+	Negate(StackType, usize),
 	New(u16),
 	Throw,
-	Increment(u16, i32),
-	Convert(StackType, StackType),
+	Convert(StackType, StackType, usize),
 	GetField(u16),
 	PutField(u16),
 	PutStatic(u16),
@@ -137,9 +126,8 @@ enum Instruction {
 	InvokeSpecial(u16),
 	InvokeStatic(u16),
 	InvokeInterface(u16),
-	Compare(StackType),
-	IfCompareZero(StackType, CompareType, usize),
-	IfCompare(StackType, CompareType, usize),
+	Compare(StackType, usize, usize),
+	GotoIf(CompareType, usize, usize, usize),
 	Goto(usize),
 	NewArray(u8),
 	NewReferenceArray(u16),
@@ -149,6 +137,7 @@ enum Instruction {
 	MonitorExit,
 	ArrayLength,
 	MultiNewArray(u16, u8),
+	Argument(u16),
 }
 
 #[derive(Debug, Clone)]
@@ -162,6 +151,19 @@ enum VerificationTypeInfo {
   UninitializedThis,
   Object(String),
   Uninitialized,
+}
+
+impl VerificationTypeInfo {
+	fn to_stack_type(&self) -> StackType {
+		match *self {
+			VerificationTypeInfo::Integer => StackType::Integer,
+			VerificationTypeInfo::Float => StackType::Float,
+			VerificationTypeInfo::Long => StackType::Long,
+			VerificationTypeInfo::Double => StackType::Double,
+			VerificationTypeInfo::Object(_) => StackType::Reference,
+			_ => panic!("Invalid verification type: {:?}", self),
+		}
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -192,7 +194,6 @@ struct StackMapFrame {
 struct Code {
 	max_stack: u16,
 	max_locals: u16,
-	stack_map_table: Vec<StackMapFrame>,
 	instructions: BTreeMap<usize, Vec<Instruction>>,
 	exception_table: Vec<ExceptionTableEntry>,
 }
@@ -310,7 +311,7 @@ fn field_type_to_stack_type(field_type: &FieldType) -> VerificationTypeInfo {
 		&FieldType::Reference(ref name) => VerificationTypeInfo::Object(name.clone()),
 		&FieldType::Short => VerificationTypeInfo::Integer,
 		&FieldType::Boolean => VerificationTypeInfo::Integer,
-		&FieldType::Array(ref elementType) => VerificationTypeInfo::Object(format!("[{:?}", elementType)),
+		&FieldType::Array(ref element_type) => VerificationTypeInfo::Object(format!("[{:?}", element_type)),
 	}
 }
 
@@ -429,192 +430,427 @@ fn read_i32(bytes: &[u8], position: &mut usize) -> i32 {
 	read_u32(bytes, position) as i32
 }
 
-fn relative_jump(ip:usize, offset:i32) -> usize {
-	((ip as i64) + (offset as i64)) as usize
+impl StackType {
+	fn is_long(&self) -> bool {
+		match *self {
+			StackType::Long|StackType::Double => true,
+			StackType::Integer|StackType::Float|StackType::Reference => false,
+			_ => panic!("Unknown stack type: {:?}", self),
+		}
+	}
 }
 
-fn parse_instructions(code: &[u8], constants: &Vec<Constant>) -> Result<Vec<Instruction>, Box<Error>> {
-	let mut instructions = vec![Instruction::Nop; code.len()];
+fn parse_instructions(code: &[u8], constants: &Vec<Constant>, stack_map: &Vec<StackMapFrame>) -> Result<Vec<Instruction>, Box<Error>> {
+
+	#[derive(Debug)]
+	struct BasicBlock {
+		instructions: Vec<Instruction>,
+		stack: Vec<usize>,
+		locals: BTreeMap<usize, usize>,
+		terminator: Option<Instruction>,
+	};
+
+	impl BasicBlock {
+		fn pop_value(&mut self) -> usize {
+			self.stack.pop().unwrap()
+		}
+		fn pop_long_value(&mut self) -> usize {
+			self.stack.pop().unwrap();
+			self.stack.pop().unwrap()
+		}
+		fn push_value(&mut self, value: usize) {
+			self.stack.push(value);
+		}
+		fn push_long_value(&mut self, value: usize) {
+			self.stack.push(value);
+			self.stack.push(!0);
+		}
+		fn push_result(&mut self, kind: StackType, value: usize) {
+			if kind.is_long() {
+				self.push_long_value(value);
+			} else {
+				self.push_value(value);
+			}
+		}
+		fn push(&mut self, kind: StackType, instruction: Instruction) {
+			let value = self.instructions.len();
+			self.push_result(kind, value);
+			self.instructions.push(instruction);
+		}
+		fn pop(&mut self, kind: StackType) -> usize {
+			if kind.is_long() {
+				self.pop_long_value()
+			} else {
+				self.pop_value()
+			}
+		}
+		fn swap(&mut self, kind: StackType) {
+			let v0 = self.pop(kind);
+			let v1 = self.pop(kind);
+			self.push_result(kind, v0);
+			self.push_result(kind, v1);
+
+		}
+		fn load(&mut self, kind: StackType, id: u16) {
+			let value = self.locals.get(&(id as usize)).unwrap();
+			self.stack.push(*value);
+			if kind.is_long() {
+				self.stack.push(!0);
+			}
+		}
+		fn store(&mut self, kind: StackType, id: u16) {
+			let value = self.pop(kind);
+			self.locals.insert(id as usize, value);
+		}
+		fn array_load(&mut self, kind: StackType) {
+			let arrayref = self.pop(StackType::Reference);
+			let index = self.pop(StackType::Integer);
+			self.push(kind, Instruction::ArrayLoad(kind, arrayref, index));
+		}
+		fn array_store(&mut self, kind: StackType) {
+			let arrayref = self.pop(StackType::Reference);
+			let index = self.pop(StackType::Integer);
+			let value = self.pop(kind);
+			self.instructions.push(Instruction::ArrayStore(kind, arrayref, index, value));
+		}
+
+		fn binary_operation(&mut self, operation_kind: BinaryOperation, type_kind: StackType) {
+			let left = self.pop(type_kind);
+			let right = self.pop(type_kind);
+			self.push(type_kind, Instruction::BinaryOperation(type_kind, operation_kind, left, right));
+		}
+
+		fn negate(&mut self, type_kind: StackType) {
+			let value = self.pop(type_kind);
+			self.push(type_kind, Instruction::Negate(type_kind, value));
+		}
+
+		fn convert(&mut self, from: StackType, to: StackType) {
+			let value = self.pop(from);
+			self.push(to, Instruction::Convert(from, to, value))
+		}
+
+		fn compare(&mut self, kind: StackType) {
+			let left = self.pop(kind);
+			let right = self.pop(kind);
+			self.push(StackType::Integer, Instruction::Compare(kind, left, right))
+		}
+
+		fn terminate_return(&mut self, kind: StackType) {
+			let value = self.pop(kind);
+			self.terminator = Some(Instruction::Return(kind, value))
+		}
+		fn terminate_return_void(&mut self) {
+			self.terminator = Some(Instruction::ReturnVoid)
+		}
+		fn terminate_goto(&mut self, destination: usize) {
+			self.terminator = Some(Instruction::Goto(destination))
+		}
+		fn terminate_compare(&mut self, compare_type: CompareType, destination_then: usize, destination_else: usize) {
+			self.compare(StackType::Integer);
+			let cmp = self.pop(StackType::Integer);
+			self.terminator = Some(Instruction::GotoIf(compare_type, cmp, destination_then, destination_else))
+		}
+		fn terminate_compare_reference(&mut self, compare_type: CompareType, destination_then: usize, destination_else: usize) {
+			self.compare(StackType::Reference);
+			let cmp = self.pop(StackType::Integer);
+			self.terminator = Some(Instruction::GotoIf(compare_type, cmp, destination_then, destination_else))
+		}
+		fn terminate_compare_with_zero(&mut self, compare_type: CompareType, destination_then: usize, destination_else: usize) {
+			let cmp = self.pop(StackType::Integer);
+			self.terminator = Some(Instruction::GotoIf(compare_type, cmp, destination_then, destination_else))
+		}
+		fn terminate_compare_with_null(&mut self, compare_type: CompareType, destination_then: usize, destination_else: usize) {
+			self.push(StackType::Reference, Instruction::NullConstant);
+			self.swap(StackType::Reference);
+			self.terminate_compare_reference(compare_type, destination_then, destination_else);
+		}
+		fn is_terminated(&self) -> bool {
+			self.terminator.is_some()
+		}
+		fn new(initial_state: &StackMapFrame) -> BasicBlock {
+			let mut bb = BasicBlock {
+				instructions: vec![],
+				stack: vec![],
+				locals: BTreeMap::new(),
+				terminator: None,
+			};
+			let mut n = 0;
+			for local in initial_state.locals.iter() {
+				let kind = local.to_stack_type();
+				bb.push(kind, Instruction::Argument(n));
+				bb.store(kind, n as u16);
+				if kind.is_long() {
+					n+=2;
+				} else {
+					n+=1;
+				}
+			}
+			bb
+		}
+		fn continue_new(initial_state: &BasicBlock) -> BasicBlock{
+			BasicBlock {
+				instructions: vec![],
+				stack: initial_state.stack.clone(),
+				locals: initial_state.locals.clone(),
+				terminator: None,
+			}
+		}
+	}
+
+	fn relative_jump(ip:usize, offset:i32) -> usize {
+		((ip as i64) + (offset as i64)) as usize
+	}
+
+	fn push_constant(bb: &mut BasicBlock, constants: &Vec<Constant>, id: u16) {
+		let constant = &constants[id as usize - 1];
+		match *constant {
+			Constant::Integer(n) => bb.push(StackType::Integer, Instruction::IntegerConstant(n)),
+			Constant::Float(n) => bb.push(StackType::Float, Instruction::FloatConstant(n)),
+			Constant::Long(n) => bb.push(StackType::Long, Instruction::LongConstant(n)),
+			Constant::Double(n) => bb.push(StackType::Double, Instruction::DoubleConstant(n)),
+			_ => panic!("Constant is not a value: {:?}", constant),
+		}
+	}
+
 	let mut i = 0;
+	let mut bb = BasicBlock::new(&stack_map[0]);
+	let mut blocks = BTreeMap::new();
+	let mut current_block_offset = i;
+
 	while i < code.len() {
 		let ip = i;
 		let opcode = read_u8(code, &mut i);
-		instructions[ip] = match opcode {
-			0x00 => Instruction::Nop,
-			0x01 => Instruction::NullConstant,
-			0x02 => Instruction::IntegerConstant(-1),
-			0x03 => Instruction::IntegerConstant(0),
-			0x04 => Instruction::IntegerConstant(1),
-			0x05 => Instruction::IntegerConstant(2),
-			0x06 => Instruction::IntegerConstant(3),
-			0x07 => Instruction::IntegerConstant(4),
-			0x08 => Instruction::IntegerConstant(5),
-			0x09 => Instruction::LongConstant(0),
-			0x0a => Instruction::LongConstant(1),
-			0x0b => Instruction::FloatConstant(0.0),
-			0x0c => Instruction::FloatConstant(1.0),
-			0x0d => Instruction::FloatConstant(2.0),
-			0x0e => Instruction::DoubleConstant(0.0),
-			0x0f => Instruction::DoubleConstant(1.0),
-			0x10 => Instruction::IntegerConstant(read_u8(code, &mut i) as i32),
-			0x11 => Instruction::IntegerConstant(read_u16(code, &mut i) as i32),
-			0x12 => Instruction::LoadConstant(read_u8(code, &mut i) as u16),
-			0x13 => Instruction::LoadConstant(read_u16(code, &mut i) as u16),
-			0x14 => Instruction::LoadConstant(read_u16(code, &mut i) as u16),
-			0x15 => Instruction::Load(StackType::Integer, read_u8(code, &mut i) as u16),
-			0x16 => Instruction::Load(StackType::Long, read_u8(code, &mut i) as u16),
-			0x17 => Instruction::Load(StackType::Float, read_u8(code, &mut i) as u16),
-			0x18 => Instruction::Load(StackType::Double, read_u8(code, &mut i) as u16),
-			0x19 => Instruction::Load(StackType::Reference, read_u8(code, &mut i) as u16),
-			0x1a => Instruction::Load(StackType::Integer, 0),
-			0x1b => Instruction::Load(StackType::Integer, 1),
-			0x1c => Instruction::Load(StackType::Integer, 2),
-			0x1d => Instruction::Load(StackType::Integer, 3),
-			0x1e => Instruction::Load(StackType::Long, 0),
-			0x1f => Instruction::Load(StackType::Long, 1),
-			0x20 => Instruction::Load(StackType::Long, 2),
-			0x21 => Instruction::Load(StackType::Long, 3),
-			0x22 => Instruction::Load(StackType::Float, 0),
-			0x23 => Instruction::Load(StackType::Float, 1),
-			0x24 => Instruction::Load(StackType::Float, 2),
-			0x25 => Instruction::Load(StackType::Float, 3),
-			0x26 => Instruction::Load(StackType::Double, 0),
-			0x27 => Instruction::Load(StackType::Double, 1),
-			0x28 => Instruction::Load(StackType::Double, 2),
-			0x29 => Instruction::Load(StackType::Double, 3),
-			0x2a => Instruction::Load(StackType::Reference, 0),
-			0x2b => Instruction::Load(StackType::Reference, 1),
-			0x2c => Instruction::Load(StackType::Reference, 2),
-			0x2d => Instruction::Load(StackType::Reference, 3),
-			0x2e => Instruction::ArrayLoad(StackType::Integer),
-			0x2f => Instruction::ArrayLoad(StackType::Long),
-			0x30 => Instruction::ArrayLoad(StackType::Float),
-			0x31 => Instruction::ArrayLoad(StackType::Double),
-			0x32 => Instruction::ArrayLoad(StackType::Reference),
-			0x33 => Instruction::ArrayLoad(StackType::Boolean),
-			0x34 => Instruction::ArrayLoad(StackType::Character),
-			0x35 => Instruction::ArrayLoad(StackType::Short),
-			0x36 => Instruction::Store(StackType::Integer, read_u8(code, &mut i) as u16),
-			0x37 => Instruction::Store(StackType::Long, read_u8(code, &mut i) as u16),
-			0x38 => Instruction::Store(StackType::Float, read_u8(code, &mut i) as u16),
-			0x39 => Instruction::Store(StackType::Double, read_u8(code, &mut i) as u16),
-			0x3a => Instruction::Store(StackType::Reference, read_u8(code, &mut i) as u16),
-			0x3b => Instruction::Store(StackType::Integer, 0),
-			0x3c => Instruction::Store(StackType::Integer, 1),
-			0x3d => Instruction::Store(StackType::Integer, 2),
-			0x3e => Instruction::Store(StackType::Integer, 3),
-			0x3f => Instruction::Store(StackType::Long, 0),
-			0x40 => Instruction::Store(StackType::Long, 1),
-			0x41 => Instruction::Store(StackType::Long, 2),
-			0x42 => Instruction::Store(StackType::Long, 3),
-			0x43 => Instruction::Store(StackType::Float, 0),
-			0x44 => Instruction::Store(StackType::Float, 1),
-			0x45 => Instruction::Store(StackType::Float, 2),
-			0x46 => Instruction::Store(StackType::Float, 3),
-			0x47 => Instruction::Store(StackType::Double, 0),
-			0x48 => Instruction::Store(StackType::Double, 1),
-			0x49 => Instruction::Store(StackType::Double, 2),
-			0x4a => Instruction::Store(StackType::Double, 3),
-			0x4b => Instruction::Store(StackType::Reference, 0),
-			0x4c => Instruction::Store(StackType::Reference, 1),
-			0x4d => Instruction::Store(StackType::Reference, 2),
-			0x4e => Instruction::Store(StackType::Reference, 3),
-			0x4f => Instruction::ArrayStore(StackType::Integer),
-			0x50 => Instruction::ArrayStore(StackType::Long),
-			0x51 => Instruction::ArrayStore(StackType::Float),
-			0x52 => Instruction::ArrayStore(StackType::Double),
-			0x53 => Instruction::ArrayStore(StackType::Reference),
-			0x54 => Instruction::ArrayStore(StackType::Byte),
-			0x55 => Instruction::ArrayStore(StackType::Character),
-			0x56 => Instruction::ArrayStore(StackType::Short),
-			0x57 => Instruction::Pop,
-			0x58 => Instruction::Pop2,
-			0x59 => Instruction::Dup,
-			0x5a => Instruction::DupX1,
-			0x5b => Instruction::DupX2,
-			0x5c => Instruction::Dup2,
-			0x5d => Instruction::Dup2X1,
-			0x5e => Instruction::Dup2X2,
-			0x5f => Instruction::Swap,
-			0x60 => Instruction::Add(StackType::Integer),
-			0x61 => Instruction::Add(StackType::Long),
-			0x62 => Instruction::Add(StackType::Float),
-			0x63 => Instruction::Add(StackType::Double),
-			0x64 => Instruction::Subtract(StackType::Integer),
-			0x65 => Instruction::Subtract(StackType::Long),
-			0x66 => Instruction::Subtract(StackType::Float),
-			0x67 => Instruction::Subtract(StackType::Double),
-			0x68 => Instruction::Multiply(StackType::Integer),
-			0x69 => Instruction::Multiply(StackType::Long),
-			0x6a => Instruction::Multiply(StackType::Float),
-			0x6b => Instruction::Multiply(StackType::Double),
-			0x6c => Instruction::Divide(StackType::Integer),
-			0x6d => Instruction::Divide(StackType::Long),
-			0x6e => Instruction::Divide(StackType::Float),
-			0x6f => Instruction::Divide(StackType::Double),
-			0x70 => Instruction::Remainder(StackType::Integer),
-			0x71 => Instruction::Remainder(StackType::Long),
-			0x72 => Instruction::Remainder(StackType::Float),
-			0x73 => Instruction::Remainder(StackType::Double),
-			0x74 => Instruction::Negate(StackType::Integer),
-			0x75 => Instruction::Negate(StackType::Long),
-			0x76 => Instruction::Negate(StackType::Float),
-			0x77 => Instruction::Negate(StackType::Double),
-			0x78 => Instruction::Shift(ShiftType::Left, StackType::Integer),
-			0x79 => Instruction::Shift(ShiftType::Left, StackType::Long),
-			0x7a => Instruction::Shift(ShiftType::RightArithmetic, StackType::Integer),
-			0x7b => Instruction::Shift(ShiftType::RightArithmetic, StackType::Long),
-			0x7c => Instruction::Shift(ShiftType::RightLogical, StackType::Integer),
-			0x7d => Instruction::Shift(ShiftType::RightLogical, StackType::Long),
-			0x7e => Instruction::BitwiseAnd(StackType::Integer),
-			0x7f => Instruction::BitwiseAnd(StackType::Long),
-			0x80 => Instruction::BitwiseOr(StackType::Integer),
-			0x81 => Instruction::BitwiseOr(StackType::Long),
-			0x82 => Instruction::BitwiseXor(StackType::Integer),
-			0x83 => Instruction::BitwiseXor(StackType::Long),
-			0x84 => Instruction::Increment(read_u8(code, &mut i) as u16, read_i8(code, &mut i) as i32),
-			0x85 => Instruction::Convert(StackType::Integer, StackType::Long),
-			0x86 => Instruction::Convert(StackType::Integer, StackType::Float),
-			0x87 => Instruction::Convert(StackType::Integer, StackType::Double),
-			0x88 => Instruction::Convert(StackType::Long, StackType::Integer),
-			0x89 => Instruction::Convert(StackType::Long, StackType::Float),
-			0x8a => Instruction::Convert(StackType::Long, StackType::Double),
-			0x8b => Instruction::Convert(StackType::Float, StackType::Integer),
-			0x8c => Instruction::Convert(StackType::Float, StackType::Long),
-			0x8d => Instruction::Convert(StackType::Float, StackType::Double),
-			0x8e => Instruction::Convert(StackType::Double, StackType::Integer),
-			0x8f => Instruction::Convert(StackType::Double, StackType::Long),
-			0x90 => Instruction::Convert(StackType::Double, StackType::Float),
-			0x91 => Instruction::Convert(StackType::Integer, StackType::Byte),
-			0x92 => Instruction::Convert(StackType::Integer, StackType::Character),
-			0x93 => Instruction::Convert(StackType::Integer, StackType::Short),
-			0x94 => Instruction::Compare(StackType::Long),
-			0x95 => Instruction::Compare(StackType::Float),
-			0x96 => Instruction::Compare(StackType::Float),
-			0x97 => Instruction::Compare(StackType::Double),
-			0x98 => Instruction::Compare(StackType::Double),
-			0x99 => Instruction::IfCompareZero(StackType::Integer, CompareType::EQ, relative_jump(ip, read_i16(code, &mut i) as i32)),
-			0x9a => Instruction::IfCompareZero(StackType::Integer, CompareType::NE, relative_jump(ip, read_i16(code, &mut i) as i32)),
-			0x9b => Instruction::IfCompareZero(StackType::Integer, CompareType::LT, relative_jump(ip, read_i16(code, &mut i) as i32)),
-			0x9c => Instruction::IfCompareZero(StackType::Integer, CompareType::GE, relative_jump(ip, read_i16(code, &mut i) as i32)),
-			0x9d => Instruction::IfCompareZero(StackType::Integer, CompareType::GT, relative_jump(ip, read_i16(code, &mut i) as i32)),
-			0x9e => Instruction::IfCompareZero(StackType::Integer, CompareType::LE, relative_jump(ip, read_i16(code, &mut i) as i32)),
-			0x9f => Instruction::IfCompare(StackType::Integer, CompareType::EQ, relative_jump(ip, read_i16(code, &mut i) as i32)),
-			0xa0 => Instruction::IfCompare(StackType::Integer, CompareType::NE, relative_jump(ip, read_i16(code, &mut i) as i32)),
-			0xa1 => Instruction::IfCompare(StackType::Integer, CompareType::LT, relative_jump(ip, read_i16(code, &mut i) as i32)),
-			0xa2 => Instruction::IfCompare(StackType::Integer, CompareType::GE, relative_jump(ip, read_i16(code, &mut i) as i32)),
-			0xa3 => Instruction::IfCompare(StackType::Integer, CompareType::GT, relative_jump(ip, read_i16(code, &mut i) as i32)),
-			0xa4 => Instruction::IfCompare(StackType::Integer, CompareType::LE, relative_jump(ip, read_i16(code, &mut i) as i32)),
-			0xa5 => Instruction::IfCompare(StackType::Reference, CompareType::EQ, relative_jump(ip, read_i16(code, &mut i) as i32)),
-			0xa6 => Instruction::IfCompare(StackType::Reference, CompareType::NE, relative_jump(ip, read_i16(code, &mut i) as i32)),
-			0xa7 => Instruction::Goto(relative_jump(ip, read_i16(code, &mut i) as i32)),
+		println!("{:x} {:#?} {:?}", opcode, bb, stack_map[0]);
+		match opcode {
+			0x00 => {},
+			0x01 => bb.push(StackType::Reference, Instruction::NullConstant),
+			0x02 => bb.push(StackType::Integer, Instruction::IntegerConstant(-1)),
+			0x03 => bb.push(StackType::Integer, Instruction::IntegerConstant(0)),
+			0x04 => bb.push(StackType::Integer, Instruction::IntegerConstant(1)),
+			0x05 => bb.push(StackType::Integer, Instruction::IntegerConstant(2)),
+			0x06 => bb.push(StackType::Integer, Instruction::IntegerConstant(3)),
+			0x07 => bb.push(StackType::Integer, Instruction::IntegerConstant(4)),
+			0x08 => bb.push(StackType::Integer, Instruction::IntegerConstant(5)),
+			0x09 => bb.push(StackType::Long, Instruction::LongConstant(0)),
+			0x0a => bb.push(StackType::Long, Instruction::LongConstant(1)),
+			0x0b => bb.push(StackType::Float, Instruction::FloatConstant(0.0)),
+			0x0c => bb.push(StackType::Float, Instruction::FloatConstant(1.0)),
+			0x0d => bb.push(StackType::Float, Instruction::FloatConstant(2.0)),
+			0x0e => bb.push(StackType::Double, Instruction::DoubleConstant(0.0)),
+			0x0f => bb.push(StackType::Double, Instruction::DoubleConstant(1.0)),
+			0x10 => bb.push(StackType::Integer, Instruction::IntegerConstant(read_i8(code, &mut i) as i32)),
+			0x11 => bb.push(StackType::Integer, Instruction::IntegerConstant(read_i16(code, &mut i) as i32)),
+			0x12 => push_constant(&mut bb, constants, read_u8(code, &mut i) as u16),
+			0x13 => push_constant(&mut bb, constants, read_u16(code, &mut i) as u16),
+			0x14 => push_constant(&mut bb, constants, read_u16(code, &mut i) as u16),
+			0x15 => bb.load(StackType::Integer, read_u8(code, &mut i) as u16),
+			0x16 => bb.load(StackType::Long, read_u8(code, &mut i) as u16),
+			0x17 => bb.load(StackType::Float, read_u8(code, &mut i) as u16),
+			0x18 => bb.load(StackType::Double, read_u8(code, &mut i) as u16),
+			0x19 => bb.load(StackType::Reference, read_u8(code, &mut i) as u16),
+			0x1a => bb.load(StackType::Integer, 0),
+			0x1b => bb.load(StackType::Integer, 1),
+			0x1c => bb.load(StackType::Integer, 2),
+			0x1d => bb.load(StackType::Integer, 3),
+			0x1e => bb.load(StackType::Long, 0),
+			0x1f => bb.load(StackType::Long, 1),
+			0x20 => bb.load(StackType::Long, 2),
+			0x21 => bb.load(StackType::Long, 3),
+			0x22 => bb.load(StackType::Float, 0),
+			0x23 => bb.load(StackType::Float, 1),
+			0x24 => bb.load(StackType::Float, 2),
+			0x25 => bb.load(StackType::Float, 3),
+			0x26 => bb.load(StackType::Double, 0),
+			0x27 => bb.load(StackType::Double, 1),
+			0x28 => bb.load(StackType::Double, 2),
+			0x29 => bb.load(StackType::Double, 3),
+			0x2a => bb.load(StackType::Reference, 0),
+			0x2b => bb.load(StackType::Reference, 1),
+			0x2c => bb.load(StackType::Reference, 2),
+			0x2d => bb.load(StackType::Reference, 3),
+			0x2e => bb.array_load(StackType::Integer),
+			0x2f => bb.array_load(StackType::Long),
+			0x30 => bb.array_load(StackType::Float),
+			0x31 => bb.array_load(StackType::Double),
+			0x32 => bb.array_load(StackType::Reference),
+			0x33 => bb.array_load(StackType::Boolean),
+			0x34 => bb.array_load(StackType::Character),
+			0x35 => bb.array_load(StackType::Short),
+			0x36 => bb.store(StackType::Integer, read_u8(code, &mut i) as u16),
+			0x37 => bb.store(StackType::Long, read_u8(code, &mut i) as u16),
+			0x38 => bb.store(StackType::Float, read_u8(code, &mut i) as u16),
+			0x39 => bb.store(StackType::Double, read_u8(code, &mut i) as u16),
+			0x3a => bb.store(StackType::Reference, read_u8(code, &mut i) as u16),
+			0x3b => bb.store(StackType::Integer, 0),
+			0x3c => bb.store(StackType::Integer, 1),
+			0x3d => bb.store(StackType::Integer, 2),
+			0x3e => bb.store(StackType::Integer, 3),
+			0x3f => bb.store(StackType::Long, 0),
+			0x40 => bb.store(StackType::Long, 1),
+			0x41 => bb.store(StackType::Long, 2),
+			0x42 => bb.store(StackType::Long, 3),
+			0x43 => bb.store(StackType::Float, 0),
+			0x44 => bb.store(StackType::Float, 1),
+			0x45 => bb.store(StackType::Float, 2),
+			0x46 => bb.store(StackType::Float, 3),
+			0x47 => bb.store(StackType::Double, 0),
+			0x48 => bb.store(StackType::Double, 1),
+			0x49 => bb.store(StackType::Double, 2),
+			0x4a => bb.store(StackType::Double, 3),
+			0x4b => bb.store(StackType::Reference, 0),
+			0x4c => bb.store(StackType::Reference, 1),
+			0x4d => bb.store(StackType::Reference, 2),
+			0x4e => bb.store(StackType::Reference, 3),
+			0x4f => bb.array_store(StackType::Integer),
+			0x50 => bb.array_store(StackType::Long),
+			0x51 => bb.array_store(StackType::Float),
+			0x52 => bb.array_store(StackType::Double),
+			0x53 => bb.array_store(StackType::Reference),
+			0x54 => bb.array_store(StackType::Byte),
+			0x55 => bb.array_store(StackType::Character),
+			0x56 => bb.array_store(StackType::Short),
+			0x57 => {
+				bb.pop_value();
+			},
+			0x58 => {
+				bb.pop_long_value();
+			}
+			0x59 => {
+				let value = bb.pop_value();
+				bb.push_value(value);
+				bb.push_value(value);
+			},
+			0x5a => {
+				let value1 = bb.pop_value();
+				let value2 = bb.pop_value();
+				bb.push_value(value1);
+				bb.push_value(value2);
+				bb.push_value(value1);
+			},
+			0x5b => {
+				let value1 = bb.pop_value();
+				let value2 = bb.pop_value();
+				let value3 = bb.pop_value();
+				bb.push_value(value1);
+				bb.push_value(value3);
+				bb.push_value(value2);
+				bb.push_value(value1);
+			},
+			0x5c => {
+				let value = bb.pop_long_value();
+				bb.push_long_value(value);
+				bb.push_long_value(value);
+			},
+			0x5d => {
+				let value1 = bb.pop_long_value();
+				let value2 = bb.pop_long_value();
+				bb.push_long_value(value1);
+				bb.push_long_value(value2);
+				bb.push_long_value(value1);
+			},
+			0x5e => {
+				let value1 = bb.pop_long_value();
+				let value2 = bb.pop_long_value();
+				let value3 = bb.pop_long_value();
+				bb.push_long_value(value1);
+				bb.push_long_value(value3);
+				bb.push_long_value(value2);
+				bb.push_long_value(value1);
+			},
+			0x5f => {
+				let value1 = bb.pop_value();
+				let value2 = bb.pop_value();
+				bb.push_value(value1);
+				bb.push_value(value2);
+			},
+			0x60 => bb.binary_operation(BinaryOperation::Add, StackType::Integer),
+			0x61 => bb.binary_operation(BinaryOperation::Add, StackType::Long),
+			0x62 => bb.binary_operation(BinaryOperation::Add, StackType::Float),
+			0x63 => bb.binary_operation(BinaryOperation::Add, StackType::Double),
+			0x64 => bb.binary_operation(BinaryOperation::Subtract, StackType::Integer),
+			0x65 => bb.binary_operation(BinaryOperation::Subtract, StackType::Long),
+			0x66 => bb.binary_operation(BinaryOperation::Subtract, StackType::Float),
+			0x67 => bb.binary_operation(BinaryOperation::Subtract, StackType::Double),
+			0x68 => bb.binary_operation(BinaryOperation::Multiply, StackType::Integer),
+			0x69 => bb.binary_operation(BinaryOperation::Multiply, StackType::Long),
+			0x6a => bb.binary_operation(BinaryOperation::Multiply, StackType::Float),
+			0x6b => bb.binary_operation(BinaryOperation::Multiply, StackType::Double),
+			0x6c => bb.binary_operation(BinaryOperation::Divide, StackType::Integer),
+			0x6d => bb.binary_operation(BinaryOperation::Divide, StackType::Long),
+			0x6e => bb.binary_operation(BinaryOperation::Divide, StackType::Float),
+			0x6f => bb.binary_operation(BinaryOperation::Divide, StackType::Double),
+			0x70 => bb.binary_operation(BinaryOperation::Remainder, StackType::Integer),
+			0x71 => bb.binary_operation(BinaryOperation::Remainder, StackType::Long),
+			0x72 => bb.binary_operation(BinaryOperation::Remainder, StackType::Float),
+			0x73 => bb.binary_operation(BinaryOperation::Remainder, StackType::Double),
+			0x74 => bb.negate(StackType::Integer),
+			0x75 => bb.negate(StackType::Long),
+			0x76 => bb.negate(StackType::Float),
+			0x77 => bb.negate(StackType::Double),
+			0x78 => bb.binary_operation(BinaryOperation::LeftShift, StackType::Integer),
+			0x79 => bb.binary_operation(BinaryOperation::LeftShift, StackType::Long),
+			0x7a => bb.binary_operation(BinaryOperation::RightArithmeticShift, StackType::Integer),
+			0x7b => bb.binary_operation(BinaryOperation::RightArithmeticShift, StackType::Long),
+			0x7c => bb.binary_operation(BinaryOperation::RightLogicalShift, StackType::Integer),
+			0x7d => bb.binary_operation(BinaryOperation::RightLogicalShift, StackType::Long),
+			0x7e => bb.binary_operation(BinaryOperation::BitwiseAnd, StackType::Integer),
+			0x7f => bb.binary_operation(BinaryOperation::BitwiseAnd, StackType::Long),
+			0x80 => bb.binary_operation(BinaryOperation::BitwiseOr, StackType::Integer),
+			0x81 => bb.binary_operation(BinaryOperation::BitwiseOr, StackType::Long),
+			0x82 => bb.binary_operation(BinaryOperation::BitwiseXor, StackType::Integer),
+			0x83 => bb.binary_operation(BinaryOperation::BitwiseXor, StackType::Long),
+			0x84 => {
+				let local_id = read_u8(code, &mut i) as u16;
+				bb.load(StackType::Integer, local_id);
+				bb.push(StackType::Integer, Instruction::IntegerConstant(read_i8(code, &mut i) as i32));
+				bb.binary_operation(BinaryOperation::Add, StackType::Integer);
+				bb.store(StackType::Integer, local_id);
+			},
+			0x85 => bb.convert(StackType::Integer, StackType::Long),
+			0x86 => bb.convert(StackType::Integer, StackType::Float),
+			0x87 => bb.convert(StackType::Integer, StackType::Double),
+			0x88 => bb.convert(StackType::Long, StackType::Integer),
+			0x89 => bb.convert(StackType::Long, StackType::Float),
+			0x8a => bb.convert(StackType::Long, StackType::Double),
+			0x8b => bb.convert(StackType::Float, StackType::Integer),
+			0x8c => bb.convert(StackType::Float, StackType::Long),
+			0x8d => bb.convert(StackType::Float, StackType::Double),
+			0x8e => bb.convert(StackType::Double, StackType::Integer),
+			0x8f => bb.convert(StackType::Double, StackType::Long),
+			0x90 => bb.convert(StackType::Double, StackType::Float),
+			0x91 => bb.convert(StackType::Integer, StackType::Byte),
+			0x92 => bb.convert(StackType::Integer, StackType::Character),
+			0x93 => bb.convert(StackType::Integer, StackType::Short),
 
-			0xac => Instruction::Return(StackType::Integer),
-			0xad => Instruction::Return(StackType::Long),
-			0xae => Instruction::Return(StackType::Float),
-			0xaf => Instruction::Return(StackType::Double),
-			0xb0 => Instruction::Return(StackType::Reference),
-			0xb1 => Instruction::ReturnVoid,
+			0x94 => bb.compare(StackType::Long),
+			0x95 => bb.compare(StackType::Float),
+			0x96 => bb.compare(StackType::Float),
+			0x97 => bb.compare(StackType::Double),
+			0x98 => bb.compare(StackType::Double),
+
+			0x99 => bb.terminate_compare_with_zero(CompareType::EQ, relative_jump(ip, read_i16(code, &mut i) as i32), i),
+			0x9a => bb.terminate_compare_with_zero(CompareType::NE, relative_jump(ip, read_i16(code, &mut i) as i32), i),
+			0x9b => bb.terminate_compare_with_zero(CompareType::LT, relative_jump(ip, read_i16(code, &mut i) as i32), i),
+			0x9c => bb.terminate_compare_with_zero(CompareType::GE, relative_jump(ip, read_i16(code, &mut i) as i32), i),
+			0x9d => bb.terminate_compare_with_zero(CompareType::GT, relative_jump(ip, read_i16(code, &mut i) as i32), i),
+			0x9e => bb.terminate_compare_with_zero(CompareType::LE, relative_jump(ip, read_i16(code, &mut i) as i32), i),
+			0x9f => bb.terminate_compare(CompareType::EQ, relative_jump(ip, read_i16(code, &mut i) as i32), i),
+			0xa0 => bb.terminate_compare(CompareType::NE, relative_jump(ip, read_i16(code, &mut i) as i32), i),
+			0xa1 => bb.terminate_compare(CompareType::LT, relative_jump(ip, read_i16(code, &mut i) as i32), i),
+			0xa2 => bb.terminate_compare(CompareType::GE, relative_jump(ip, read_i16(code, &mut i) as i32), i),
+			0xa3 => bb.terminate_compare(CompareType::GT, relative_jump(ip, read_i16(code, &mut i) as i32), i),
+			0xa4 => bb.terminate_compare(CompareType::LE, relative_jump(ip, read_i16(code, &mut i) as i32), i),
+			0xa5 => bb.terminate_compare_reference(CompareType::EQ, relative_jump(ip, read_i16(code, &mut i) as i32), i),
+			0xa6 => bb.terminate_compare_reference(CompareType::NE, relative_jump(ip, read_i16(code, &mut i) as i32), i),
+			0xa7 => bb.terminate_goto(relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0xac => bb.terminate_return(StackType::Integer),
+			0xad => bb.terminate_return(StackType::Long),
+			0xae => bb.terminate_return(StackType::Float),
+			0xaf => bb.terminate_return(StackType::Double),
+			0xb0 => bb.terminate_return(StackType::Reference),
+			0xb1 => bb.terminate_return_void(),
+/*
 			0xb2 => Instruction::GetStatic(read_u16(code, &mut i)),
 			0xb3 => Instruction::PutStatic(read_u16(code, &mut i)),
 			0xb4 => Instruction::GetField(read_u16(code, &mut i)),
@@ -623,8 +859,9 @@ fn parse_instructions(code: &[u8], constants: &Vec<Constant>) -> Result<Vec<Inst
 			0xb7 => Instruction::InvokeSpecial(read_u16(code, &mut i)),
 			0xb8 => Instruction::InvokeStatic(read_u16(code, &mut i)),
 			0xb9 => Instruction::InvokeInterface(read_u16(code, &mut i)),
-
-			0xbb => Instruction::New(read_u16(code, &mut i)),
+*/
+			0xbb => bb.push(StackType::Reference, Instruction::New(read_u16(code, &mut i))),
+/*
 			0xbc => Instruction::NewArray(read_u8(code, &mut i)),
 			0xbd => Instruction::NewReferenceArray(read_u16(code, &mut i)),
 			0xbe => Instruction::ArrayLength,
@@ -633,32 +870,46 @@ fn parse_instructions(code: &[u8], constants: &Vec<Constant>) -> Result<Vec<Inst
 			0xc1 => Instruction::InstanceOf(read_u16(code, &mut i)),
 			0xc2 => Instruction::MonitorEnter,
 			0xc3 => Instruction::MonitorExit,
+*/
 			0xc4 => match read_u8(code, &mut i) {
-				0x15 => Instruction::Load(StackType::Integer, read_u16(code, &mut i)),
-				0x16 => Instruction::Load(StackType::Long, read_u16(code, &mut i)),
-				0x17 => Instruction::Load(StackType::Float, read_u16(code, &mut i)),
-				0x18 => Instruction::Load(StackType::Double, read_u16(code, &mut i)),
-				0x19 => Instruction::Load(StackType::Reference, read_u16(code, &mut i)),
-				0x36 => Instruction::Store(StackType::Integer, read_u16(code, &mut i)),
-				0x37 => Instruction::Store(StackType::Long, read_u16(code, &mut i)),
-				0x38 => Instruction::Store(StackType::Float, read_u16(code, &mut i)),
-				0x39 => Instruction::Store(StackType::Double, read_u16(code, &mut i)),
-				0x3a => Instruction::Store(StackType::Reference, read_u16(code, &mut i)),
-				0x84 => Instruction::Increment(read_u16(code, &mut i), read_i16(code, &mut i) as i32),
+				0x15 => bb.load(StackType::Integer, read_u16(code, &mut i)),
+				0x16 => bb.load(StackType::Long, read_u16(code, &mut i)),
+				0x17 => bb.load(StackType::Float, read_u16(code, &mut i)),
+				0x18 => bb.load(StackType::Double, read_u16(code, &mut i)),
+				0x19 => bb.load(StackType::Reference, read_u16(code, &mut i)),
+				0x36 => bb.store(StackType::Integer, read_u16(code, &mut i)),
+				0x37 => bb.store(StackType::Long, read_u16(code, &mut i)),
+				0x38 => bb.store(StackType::Float, read_u16(code, &mut i)),
+				0x39 => bb.store(StackType::Double, read_u16(code, &mut i)),
+				0x3a => bb.store(StackType::Reference, read_u16(code, &mut i)),
+				0x84 => {
+					let local_id = read_u16(code, &mut i);
+					bb.load(StackType::Integer, local_id);
+					bb.push(StackType::Integer, Instruction::IntegerConstant(read_i16(code, &mut i) as i32));
+					bb.binary_operation(BinaryOperation::Add, StackType::Integer);
+					bb.store(StackType::Integer, local_id);
+				},
 				_ => panic!("Unknown wide opcode"),
 			},
-			0xc5 => Instruction::MultiNewArray(read_u16(code, &mut i), read_u8(code, &mut i)),
+			// 0xc5 => Instruction::MultiNewArray(read_u16(code, &mut i), read_u8(code, &mut i)),
 
-			0xc6 => Instruction::IfCompareZero(StackType::Reference, CompareType::EQ, relative_jump(ip, read_i16(code, &mut i) as i32)),
-			0xc7 => Instruction::IfCompareZero(StackType::Reference, CompareType::NE, relative_jump(ip, read_i16(code, &mut i) as i32)),
+			0xc6 => bb.terminate_compare_with_null(CompareType::EQ, relative_jump(ip, read_i16(code, &mut i) as i32), i),
+			0xc7 => bb.terminate_compare_with_null(CompareType::NE, relative_jump(ip, read_i16(code, &mut i) as i32), i),
 
-			0xc8 => Instruction::Goto(relative_jump(ip, read_i32(code, &mut i))),
-
-
+			0xc8 => bb.terminate_goto(relative_jump(ip, read_i32(code, &mut i))),
 			_ => return Err(parse_error(&format!("Unknown opcode: 0x{:x}", opcode)))
 		};
+		if bb.is_terminated() {
+			let next_bb = BasicBlock::continue_new(&bb);
+			blocks.insert(current_block_offset, bb);
+
+			bb = next_bb;
+			current_block_offset = i;
+			// stack_map[blocks.len()]
+		}
 	}
-	Ok(instructions)
+	println!("{:#?}", blocks);
+	Ok(vec![Instruction::Nop; code.len()])
 }
 
 fn parse_verification_type_info(input: &mut Read, constants: &Vec<Constant>) -> Result<VerificationTypeInfo, Box<Error>> {
@@ -745,45 +996,12 @@ fn parse_stack_map_table(input: &mut Read, stack_map_table: &mut Vec<StackMapFra
 	return Ok(());
 }
 
-fn get_basic_block_offsets(instructions: &Vec<Instruction>, stack_map_table: &Vec<StackMapFrame>, exception_table: &Vec<ExceptionTableEntry>) -> BTreeSet<usize> {
-	let mut basic_blocks_offsets = BTreeSet::new();
-	let mut cut = true;
-	for (pc, instruction) in instructions.iter().enumerate() {
-		
-		match instruction {
-			&Instruction::Nop => {
-			},
-			_ if cut => {
-				basic_blocks_offsets.insert(pc);
-				cut = false;
-			},
-			&Instruction::Goto(offset) |
-			&Instruction::IfCompare(_, _, offset) |
-			&Instruction::IfCompareZero(_, _, offset)  => {
-				basic_blocks_offsets.insert(offset);
-				cut = true;
-			},
-			_ => {
-			},
-		}
-	}
-
-	for e in exception_table {
-		basic_blocks_offsets.insert(e.start_pc as usize);
-		basic_blocks_offsets.insert(e.end_pc as usize);
-		basic_blocks_offsets.insert(e.handler_pc as usize);
-	}
-
-	basic_blocks_offsets
-}
-
 fn parse_code(input: &mut Read, constants: &Vec<Constant>, signature: &MethodType) -> Result<Code, Box<Error>> {
 	let max_stack = try!(input.read_u16::<BigEndian>());
 	let max_locals = try!(input.read_u16::<BigEndian>());
 	let code_length = try!(input.read_u32::<BigEndian>()) as usize;
 	let mut code = vec![0; code_length];
 	try!(input.read_exact(&mut code));
-	let mut instructions = try!(parse_instructions(&code, constants));
 	let exception_table = try!(parse_list(input, constants, parse_exception_table_entry));
 	let initial_stack = signature.0.iter().map(field_type_to_stack_type).collect();
 	let mut stack_map_table = vec![StackMapFrame{offset: 0, locals: initial_stack, stack: vec![]}];
@@ -801,18 +1019,12 @@ fn parse_code(input: &mut Read, constants: &Vec<Constant>, signature: &MethodTyp
 			_ => Err(parse_error(&format!("Unknown code attribute: {}", name)))
 		}
 	}));
-
-	let basic_block_offsets = get_basic_block_offsets(&instructions, &stack_map_table, &exception_table);
-	let mut basic_blocks = BTreeMap::new();
-	for offset in basic_block_offsets.iter().rev() {
-		basic_blocks.insert(*offset, instructions.split_off(*offset));
-	}
+	let basic_blocks = try!(parse_instructions(&code, constants, &stack_map_table));
 
 	Ok(Code{
 		max_stack: max_stack,
 		max_locals: max_locals,
-		stack_map_table: stack_map_table,
-		instructions: basic_blocks,
+		instructions: BTreeMap::new(),
 		exception_table: exception_table,
 	})
 }
@@ -925,169 +1137,11 @@ fn parse_class_file(file_name: &str) -> Result<ClassFile, Box<Error>> {
 	parse_class(&mut file)
 }
 
-struct Delexer {
-	line_start: bool,
-	indent: u32,
-}
-
-impl Delexer {
-	pub fn new() -> Delexer {
-		Delexer {
-			line_start: true,
-			indent: 0,
-		}
-	}
-	pub fn token(&mut self, lex: &str) {
-		if !self.line_start {
-			print!(" ");
-		} else {
-			for _ in 0 .. self.indent {
-				print!("\t");
-			}
-		}
-		print!("{}", lex);
-		self.line_start = false;
-	}
-	pub fn separator(&mut self, lex: &str) {
-		print!("{}", lex);
-	}
-	pub fn end_line(&mut self) {
-		print!("\n");
-		self.line_start = true;
-	}
-	pub fn start_bracket(&mut self) {
-		self.token("{");
-		self.end_line();
-		self.indent += 1;
-	}
-	pub fn end_bracket(&mut self) {
-		self.indent -= 1;
-		self.token("}");
-		self.end_line();
-	}
-}
-
-fn dump_field(class: &ClassFile, field: &Field, delexer: &mut Delexer) {
-	if let Some(ref signature) = field.signature {
-		delexer.token(&format!("// signature: {}", signature));
-		delexer.end_line();
-	}
-	if field.access_flags & 0x0001 == 0x0001 {
-		delexer.token("public");
-	}
-	if field.access_flags & 0x0002 == 0x0002 {
-		delexer.token("private");
-	}
-	if field.access_flags & 0x0004 == 0x0004 {
-		delexer.token("protected");
-	}
-	if field.access_flags & 0x0008 == 0x0008 {
-		delexer.token("static");
-	}
-	if field.access_flags & 0x0010 == 0x0010 {
-		delexer.token("final");
-	}
-	if field.access_flags & 0x0040 == 0x0040 {
-		delexer.token("volatile");
-	}
-	if field.access_flags & 0x0080 == 0x0080 {
-		delexer.token("transient");
-	}
-	delexer.token(&format!("{:?}", field.descriptor));
-	delexer.token(get_string_constant(&class.constant_pool, field.name_index));
-
-	match field.constant_value {
-		Some(constant_id) => {
-			delexer.token("=");
-			delexer.token(&format!("{:?}", class.constant_pool[constant_id as usize - 1]));
-		}
-		None => {},
-	}
-	delexer.separator(";");
-	delexer.end_line();
-}
-
-fn dump_method(class: &ClassFile, method: &Method, delexer: &mut Delexer) {
-	if let Some(ref signature) = method.signature {
-		delexer.token(&format!("// signature: {}", signature));
-		delexer.end_line();
-	}
-	if method.access_flags & 0x0001 == 0x0001 {
-		delexer.token("public");
-	}
-	delexer.token(&format!("{:?}", method.descriptor));
-	delexer.token(get_string_constant(&class.constant_pool, method.name_index));
-	delexer.token(&format!("{:?}", method.exceptions));
-	match method.code {
-		Some(ref code) => { 
-			delexer.start_bracket();
-			delexer.token(&format!("// stack_map_table: {:?};", code.stack_map_table));
-			delexer.end_line();
-			delexer.token(&format!("// exception_table: {:?};", code.exception_table));
-			delexer.end_line();
-			for (offset, block) in &code.instructions {
-				delexer.token(&format!("{:4}:", offset));
-				delexer.end_line();
-				for instruction in block {
-					match *instruction {
-						Instruction::Nop => {},
-						_ => {
-							delexer.token(&format!("      {:?}", instruction));
-							delexer.separator(";");
-							delexer.end_line();
-						}
-					}
-				}
-			}
-			delexer.end_bracket();
-		},
-		None => delexer.separator(";"),
-	}
-	delexer.end_line();
-}
-
-fn dump_class(class: &ClassFile, delexer: &mut Delexer) {
-	if (class.access_flags & 0x0001) == 0x0001 {
-		delexer.token("public");
-	}
-	if (class.access_flags & 0x0010) == 0x0010 {
-		delexer.token("final");
-	}
-	match class.access_flags & 0x6600 {
-		0x0000 => delexer.token("class"),
-		0x0600 => delexer.token("interface"),
-		0x2000 => delexer.token("@interface"),
-		0x4000 => delexer.token("enum"),
-		_ => panic!("Unsupported class access flags: 0x{:04x}", class.access_flags)
-	}
-	delexer.token(get_class_constant(&class.constant_pool, class.this_class));
-	delexer.start_bracket();
-
-	match class.source_file {
-		Some(source_file) => { 
-			delexer.token("//");
-			delexer.token(get_string_constant(&class.constant_pool, source_file));
-			delexer.end_line();
-		}
-		None => ()
-	}
-
-	for field in &class.fields {
-		dump_field(class, &field, delexer);
-	}
-	for method in &class.methods {
-		dump_method(class, &method, delexer);
-	}
-	delexer.end_bracket();
-}
-
 fn main() {
 	for arg in env::args().skip(1) {
 		match  parse_class_file(&arg) {
 			Err(e) => {println!("{}", e); break;},
-			Ok(v) => {
-				dump_class(&v, &mut Delexer::new());
-			}
+			Ok(v) => {},
 		}
 	}
 }
