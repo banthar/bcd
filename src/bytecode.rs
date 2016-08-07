@@ -1,18 +1,10 @@
 extern crate byteorder;
 
 use std::error::Error;
-use std::env;
-use std::fs::File;
-use std::io::{Read, ErrorKind};
-use self::byteorder::{BigEndian, ReadBytesExt};
-use std::iter::Peekable;
-use std::str::Chars;
+use std::io::Read;
 use std::collections::BTreeMap;
-use std;
 
-use class::FieldType;
 use class::Constant;
-use class::ClassFile;
 use class::StackMapFrame;
 use class::VerificationTypeInfo;
 

@@ -2,14 +2,11 @@
 extern crate byteorder;
 
 use std::error::Error;
-use std::env;
-use std::fs::File;
 use std;
 use std::io::{Read, ErrorKind};
 use self::byteorder::{BigEndian, ReadBytesExt};
 use std::iter::Peekable;
 use std::str::Chars;
-use std::collections::BTreeMap;
 
 #[derive(Debug)]
 pub enum Constant {
@@ -310,35 +307,6 @@ fn parse_exception_table_entry(input: &mut Read, _: &Vec<Constant>) -> Result<Ex
 		handler_pc: handler_pc,
 		catch_type: catch_type,
 	})
-}
-
-fn read_u8(bytes: &[u8], position: &mut usize) -> u8 {
-	let b = bytes[*position];
-	*position+=1;
-	b
-}
-
-fn read_u16(bytes: &[u8], position: &mut usize) -> u16 {
-	(read_u8(bytes, position) as u16) << 8u16 | (read_u8(bytes, position) as u16)
-}
-
-fn read_u32(bytes: &[u8], position: &mut usize) -> u32 {
-	(read_u8(bytes, position) as u32) << 24u16 |
-	(read_u8(bytes, position) as u32) << 16u16 |
-	(read_u8(bytes, position) as u32) << 8u16 |
-	(read_u8(bytes, position) as u32)
-}
-
-fn read_i8(bytes: &[u8], position: &mut usize) -> i8 {
-	read_u8(bytes, position) as i8
-}
-
-fn read_i16(bytes: &[u8], position: &mut usize) -> i16 {
-	read_u16(bytes, position) as i16
-}
-
-fn read_i32(bytes: &[u8], position: &mut usize) -> i32 {
-	read_u32(bytes, position) as i32
 }
 
 fn parse_verification_type_info(input: &mut Read, constants: &Vec<Constant>) -> Result<VerificationTypeInfo, Box<Error>> {
