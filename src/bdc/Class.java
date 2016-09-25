@@ -3,6 +3,7 @@ package bdc;
 import java.util.Arrays;
 
 import bdc.ConstantPool.ClassReference;
+import bdc.Type.ReferenceType;
 
 public class Class {
 
@@ -50,6 +51,10 @@ public class Class {
 		+ Arrays.toString(this.interfaces) + ", fields=" + Arrays.toString(this.fields) + ", methods="
 		+ Arrays.toString(this.methods) + ", sourceFile=" + this.sourceFile + ", signature=" + this.signature
 		+ "]";
+    }
+
+    public ReferenceType getType() {
+	return getName().getType();
     }
 
 }

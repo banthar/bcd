@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import bdc.ConstantPool.ClassReference;
 import bdc.ConstantPool.FieldReference;
@@ -127,7 +128,12 @@ public class InstructionPrinter implements InstructionVisitor<Register> {
     @Override
     public void jumpIf(final PrimitiveType type, final int offset, final bdc.InstructionVisitor.CompareType compareType,
 	    final Register left, final Register right) {
-	print("jumpIf " + type.getJavaName(), offset, left, compareType, right);
+	print("jumpIf", type.getJavaName(), offset, left, compareType, right);
+    }
+
+    @Override
+    public void jumpTable(final Register value, final int defaultOffset, final Map<Integer, Integer> table) {
+	print("lookupSwitch", value, defaultOffset, table);
     }
 
     @Override
@@ -216,14 +222,26 @@ public class InstructionPrinter implements InstructionVisitor<Register> {
     @Override
     public List<Register> invokeSpecial(final MethodReference methodReference, final Register target,
 	    final List<Register> args) {
-	throw new IllegalStateException();
-
+	final MethodType methodType = methodReference.getType();
+	if (methodType.isVoid()) {
+	    print("invokeSpecial", methodReference, target, args);
+	    return Collections.emptyList();
+	} else {
+	    return Arrays.asList(instruction((FieldType) methodType.getReturnType(), "invokeSpecial", methodReference,
+		    target, args));
+	}
     }
 
     @Override
     public List<Register> invokeStatic(final MethodReference methodReference, final List<Register> args) {
-	throw new IllegalStateException();
-
+	final MethodType methodType = methodReference.getType();
+	if (methodType.isVoid()) {
+	    print("invokeStatic", methodReference, args);
+	    return Collections.emptyList();
+	} else {
+	    return Arrays
+		    .asList(instruction((FieldType) methodType.getReturnType(), "invokeStatic", methodReference, args));
+	}
     }
 
     @Override
@@ -241,8 +259,7 @@ public class InstructionPrinter implements InstructionVisitor<Register> {
 
     @Override
     public Register newInstance(final ClassReference classReference) {
-	throw new IllegalStateException();
-
+	return instruction(PrimitiveType.Reference, "new", classReference.getJavaName());
     }
 
     @Override
@@ -262,7 +279,7 @@ public class InstructionPrinter implements InstructionVisitor<Register> {
     }
 
     @Override
-    public Register returnError(final Register exception) {
-	throw new IllegalStateException();
+    public void returnError(final Register exception) {
+	print("throw", exception);
     }
 }

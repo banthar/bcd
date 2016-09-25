@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 
 import bdc.ConstantPool.ClassReference;
@@ -17,13 +18,15 @@ import bdc.InstructionVisitor.BinaryOperation;
 import bdc.InstructionVisitor.BitwiseOperationType;
 import bdc.InstructionVisitor.CompareType;
 import bdc.InstructionVisitor.ShiftType;
+import bdc.Type.FieldType;
 import bdc.Type.MethodType;
 import bdc.Type.PrimitiveType;
+import bdc.Type.ReferenceType;
 
 public class InstructionParser {
 
-    public static void parseCode(final DataInputStream dataInput, final ConstantPool constantPool)
-	    throws IOException, ClassFormatException {
+    public static void parseCode(final DataInputStream dataInput, final ConstantPool constantPool,
+	    final ReferenceType selfType, final MethodType methodType) throws IOException, ClassFormatException {
 	final int maxStack = dataInput.readUnsignedShort();
 	final int maxLocals = dataInput.readUnsignedShort();
 	final int codeLength = dataInput.readInt();
@@ -33,7 +36,7 @@ public class InstructionParser {
 	final byte[] instructionBytes = new byte[codeLength];
 	dataInput.readFully(instructionBytes);
 	parseInstructions(new InstructionPrinter(System.out), ByteBuffer.wrap(instructionBytes).asReadOnlyBuffer(),
-		constantPool);
+		constantPool, selfType, methodType);
 	final int exceptionLength = dataInput.readUnsignedShort();
 	for (int i = 0; i < exceptionLength; i++) {
 	    final int startPc = dataInput.readUnsignedShort();
@@ -67,9 +70,17 @@ public class InstructionParser {
     }
 
     private static <T> void parseInstructions(final InstructionVisitor<T> visitor, final ByteBuffer in,
-	    final ConstantPool constantPool) throws ClassFormatException {
+	    final ConstantPool constantPool, final ReferenceType selfType, final MethodType methodType)
+	    throws ClassFormatException {
 	final Queue<T> stack = new ArrayDeque<>();
 	final HashMap<Integer, T> locals = new HashMap<>();
+	{
+	    int n = 0;
+	    locals.put(n++, visitor.nullConstant());
+	    for (final FieldType arg : methodType.getArgumentTypes()) {
+		locals.put(n++, visitor.nullConstant());
+	    }
+	}
 	while (in.position() < in.limit()) {
 	    final int opcodeOffset = in.position();
 	    try {
@@ -406,6 +417,41 @@ public class InstructionParser {
 		    throw new ClassFormatException("jsr instruction not supported");
 		case 0xa9:
 		    throw new ClassFormatException("ret instruction not supported");
+		case 0xaa: {
+		    while (in.position() % 4 != 0) {
+			if (in.get() != 0) {
+			    throw new ClassFormatException("non-zero padding byte");
+			}
+		    }
+		    final int defaultOffset = in.getInt() + opcodeOffset;
+		    final int low = in.getInt();
+		    final int high = in.getInt();
+		    final int n = high - low + 1;
+		    final Map<Integer, Integer> lookupTable = new HashMap<>();
+		    for (int i = low; i <= high; i++) {
+			final int offset = in.getInt() + opcodeOffset;
+			lookupTable.put(i, offset);
+		    }
+		    visitor.jumpTable(stack.remove(), defaultOffset, lookupTable);
+		    break;
+		}
+		case 0xab: {
+		    while (in.position() % 4 != 0) {
+			if (in.get() != 0) {
+			    throw new ClassFormatException("non-zero padding byte");
+			}
+		    }
+		    final int defaultOffset = in.getInt() + opcodeOffset;
+		    final int n = in.getInt();
+		    final Map<Integer, Integer> lookupTable = new HashMap<>();
+		    for (int i = 0; i < n; i++) {
+			final int match = in.getInt();
+			final int offset = in.getInt() + opcodeOffset;
+			lookupTable.put(match, offset);
+		    }
+		    visitor.jumpTable(stack.remove(), defaultOffset, lookupTable);
+		    break;
+		}
 		case 0xac:
 		case 0xad:
 		case 0xae:
@@ -440,7 +486,7 @@ public class InstructionParser {
 		}
 		case 0xb7: {
 		    final MethodReference methodReference = constantPool.getMethodReference(getUnsignedShort(in));
-		    visitor.invokeSpecial(constantPool.getMethodReference(getUnsignedShort(in)), stack.remove(),
+		    visitor.invokeSpecial(methodReference, stack.remove(),
 			    readMethodArguments(methodReference.getType(), stack)).forEach(stack::add);
 		    break;
 		}
@@ -485,15 +531,32 @@ public class InstructionParser {
 		    stack.add(visitor.arrayLength(stack.remove()));
 		    break;
 		}
-		case 0xbf:
-		case 0xc0:
-		case 0xc1:
-		case 0xc2:
-		case 0xc3:
+		case 0xbf: {
+		    visitor.returnError(stack.remove());
+		    break;
+		}
+		case 0xc0: {
+		    final ClassReference type = constantPool.getClassReference(getUnsignedShort(in));
+		    stack.add(visitor.checkedCast(type, stack.remove()));
+		    break;
+		}
+		case 0xc1: {
+		    final ClassReference type = constantPool.getClassReference(getUnsignedShort(in));
+		    stack.add(visitor.instanceOf(type, stack.remove()));
+		    break;
+		}
+		case 0xc2: {
+		    visitor.monitorEnter(stack.remove());
+		    break;
+		}
+		case 0xc3: {
+		    visitor.monitorExit(stack.remove());
+		    break;
+		}
 		case 0xc4:
+		    throw new ClassFormatException("wide instruction not supported");
 		case 0xc5:
-		    throw new ClassFormatException(String.format("TODO: 0x%02x", opcode));
-
+		    throw new ClassFormatException("multianewarray instruction not supported");
 		case 0xc6:
 		case 0xc7: {
 		    final CompareType compareType = InstructionVisitor.CompareType.fromId(opcode - 0xc6);

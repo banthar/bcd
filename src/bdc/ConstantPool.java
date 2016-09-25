@@ -6,6 +6,7 @@ import java.util.Arrays;
 
 import bdc.Type.FieldType;
 import bdc.Type.MethodType;
+import bdc.Type.ReferenceType;
 
 public class ConstantPool {
     private final Object[] constants;
@@ -95,6 +96,20 @@ public class ConstantPool {
 	}
 	case Utf8: {
 	    return dataInput.readUTF();
+	}
+	case InvokeDynamic: {
+	    final int bootstrapMethodAttrIndex = dataInput.readUnsignedShort();
+	    final int nameAndType = dataInput.readUnsignedShort();
+	    return null;
+	}
+	case MethodHandle: {
+	    final int referenceKind = dataInput.readUnsignedByte();
+	    final int referenceIndex = dataInput.readUnsignedShort();
+	    return null;
+	}
+	case MethodType: {
+	    final int descriptorIndex = dataInput.readUnsignedShort();
+	    return null;
 	}
 	default:
 	    throw new IllegalStateException("Unsupported constant type: " + type);
@@ -250,6 +265,10 @@ public class ConstantPool {
 
 	public String getJavaName() {
 	    return getUTF8(this.nameIndex).replace('/', '.');
+	}
+
+	public ReferenceType getType() {
+	    return ReferenceType.fromClassName(getUTF8(this.nameIndex));
 	}
     }
 

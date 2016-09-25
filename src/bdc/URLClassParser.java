@@ -59,7 +59,7 @@ public class URLClassParser {
 	final ClassReference superClass = constantPool.getClassReference(dataInput.readUnsignedShort());
 	final ClassReference[] interfaces = readInterfaces(dataInput, constantPool);
 	final Field[] fields = readFields(dataInput, constantPool);
-	final Method[] methods = readMethods(dataInput, constantPool);
+	final Method[] methods = readMethods(dataInput, thisClass, constantPool);
 	String sourceFile = null;
 	final int attributes = dataInput.readUnsignedShort();
 	String signature = null;
@@ -68,6 +68,9 @@ public class URLClassParser {
 	    final int length = dataInput.readInt();
 	    switch (name) {
 	    case "InnerClasses":
+		dataInput.readFully(new byte[length]);
+		break;
+	    case "BootstrapMethods":
 		dataInput.readFully(new byte[length]);
 		break;
 	    case "SourceFile":
@@ -90,17 +93,17 @@ public class URLClassParser {
 		signature);
     }
 
-    private Method[] readMethods(final DataInput dataInput, final ConstantPool constantPool)
-	    throws IOException, ClassFormatException {
+    private Method[] readMethods(final DataInput dataInput, final ClassReference thisClass,
+	    final ConstantPool constantPool) throws IOException, ClassFormatException {
 	final Method[] methods = new Method[dataInput.readUnsignedShort()];
 	for (int i = 0; i < methods.length; i++) {
-	    methods[i] = readMethod(dataInput, constantPool);
+	    methods[i] = readMethod(dataInput, thisClass, constantPool);
 	}
 	return methods;
     }
 
-    private Method readMethod(final DataInput dataInput, final ConstantPool constantPool)
-	    throws IOException, ClassFormatException {
+    private Method readMethod(final DataInput dataInput, final ClassReference thisClass,
+	    final ConstantPool constantPool) throws IOException, ClassFormatException {
 	final int accessFlags = dataInput.readUnsignedShort();
 	final int nameIndex = dataInput.readUnsignedShort();
 	final int descriptorIndex = dataInput.readUnsignedShort();
@@ -133,8 +136,8 @@ public class URLClassParser {
 
 	    }
 	}
-	return new Method(accessFlags, constantPool.getUTF8(nameIndex), constantPool.getUTF8(descriptorIndex), code,
-		exceptions, signature);
+	return new Method(thisClass, accessFlags, constantPool.getUTF8(nameIndex),
+		constantPool.getUTF8(descriptorIndex), code, exceptions, signature);
     }
 
     private Field[] readFields(final DataInput dataInput, final ConstantPool constantPool) throws IOException {

@@ -7,9 +7,11 @@ import java.util.Arrays;
 import java.util.List;
 
 import bdc.ConstantPool.ClassReference;
+import bdc.Type.MethodType;
 
 public class Method {
 
+    private final ClassReference selfType;
     private final int accessFlags;
     private final String name;
     private final String descriptor;
@@ -17,8 +19,9 @@ public class Method {
     private final List<ClassReference> exceptions;
     private final String signature;
 
-    public Method(final int accessFlags, final String name, final String descriptor, final byte[] code,
-	    final List<ClassReference> exceptions, final String signature) {
+    public Method(final ClassReference selfType, final int accessFlags, final String name, final String descriptor,
+	    final byte[] code, final List<ClassReference> exceptions, final String signature) {
+	this.selfType = selfType;
 	this.accessFlags = accessFlags;
 	this.name = name;
 	this.descriptor = descriptor;
@@ -36,7 +39,8 @@ public class Method {
 	    return;
 	}
 	final DataInputStream dataInput = new DataInputStream(new ByteArrayInputStream(this.code));
-	InstructionParser.parseCode(dataInput, constantPool);
+	InstructionParser.parseCode(dataInput, constantPool, this.selfType.getType(),
+		MethodType.fromDescriptor(this.descriptor));
 	if (dataInput.read() != -1) {
 	    throw new ClassFormatException("Extra bytes at end of method code");
 	}

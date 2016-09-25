@@ -61,6 +61,31 @@ public interface Type {
 
     }
 
+    class ArrayType implements FieldType {
+
+	private final FieldType elementType;
+
+	public ArrayType(final FieldType elementType) {
+	    this.elementType = elementType;
+	}
+
+	@Override
+	public String getJavaName() {
+	    return elementType + "[]";
+	}
+
+	@Override
+	public int getByteCodeSize() {
+	    return 1;
+	}
+
+	@Override
+	public String toString() {
+	    return "Array<" + elementType + ">";
+	}
+
+    }
+
     class ReferenceType implements FieldType {
 	private final String name;
 
@@ -76,6 +101,15 @@ public interface Type {
 	@Override
 	public int getByteCodeSize() {
 	    return 1;
+	}
+
+	public static ReferenceType fromClassName(final String name) {
+	    return new ReferenceType(name);
+	}
+
+	@Override
+	public String toString() {
+	    return "Reference<" + name + ">";
 	}
     }
 
@@ -105,6 +139,10 @@ public interface Type {
 	public String toString() {
 	    return argumentTypes + " -> " + returnType;
 	}
+
+	public static MethodType fromDescriptor(final String descriptor) throws ClassFormatException {
+	    return (MethodType) Type.fromDescriptor(descriptor);
+	}
     }
 
     class VoidType implements Type {
@@ -128,8 +166,18 @@ public interface Type {
     static Type parseType(final CharBuffer buffer) throws ClassFormatException {
 	final char c = buffer.get();
 	switch (c) {
+	case 'B':
+	    return PrimitiveType.Byte;
+	case 'C':
+	    return PrimitiveType.Char;
+	case 'D':
+	    return PrimitiveType.Double;
+	case 'F':
+	    return PrimitiveType.Float;
 	case 'I':
 	    return PrimitiveType.Integer;
+	case 'J':
+	    return PrimitiveType.Long;
 	case 'L': {
 	    final int start = buffer.position();
 	    int end = start;
@@ -145,7 +193,17 @@ public interface Type {
 	    buffer.get();
 	    return new ReferenceType(name);
 	}
-	case '(':
+	case 'S':
+	    return PrimitiveType.Short;
+	case 'Z':
+	    return PrimitiveType.Boolean;
+	case 'V':
+	    return new VoidType();
+	case '[': {
+	    final FieldType elementType = (FieldType) parseType(buffer);
+	    return new ArrayType(elementType);
+	}
+	case '(': {
 	    final List<FieldType> argumentTypes = new ArrayList<>();
 	    while (buffer.get(buffer.position()) != ')') {
 		argumentTypes.add((FieldType) parseType(buffer));
@@ -155,8 +213,7 @@ public interface Type {
 	    }
 	    final Type returnType = parseType(buffer);
 	    return new MethodType(argumentTypes, returnType);
-	case 'V':
-	    return new VoidType();
+	}
 	default:
 	    throw parseError(buffer, "unknown type: \"" + c + "\"");
 	}

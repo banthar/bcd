@@ -1,6 +1,7 @@
 package bdc;
 
 import java.util.List;
+import java.util.Map;
 
 import bdc.ConstantPool.ClassReference;
 import bdc.ConstantPool.FieldReference;
@@ -114,9 +115,12 @@ public interface InstructionVisitor<T> {
 
     void jump(int unsignedShort);
 
+    void jumpTable(T value, int defaultOffset, Map<Integer, Integer> table);
+
     void returnValue(PrimitiveType type, T value);
 
     void returnVoid();
 
-    T returnError(T exception);
+    void returnError(T exception);
+
 }
