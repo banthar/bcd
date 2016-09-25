@@ -12,7 +12,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
-import bdc.ConstantPool.ClassConstant;
+import bdc.ConstantPool.ClassReference;
 
 public class URLClassParser {
 
@@ -22,7 +22,7 @@ public class URLClassParser {
 	this.urls = urls;
     }
 
-    public Class loadClass(final String name) throws IOException, ClassFormatError {
+    public Class loadClass(final String name) throws IOException, ClassFormatException {
 	try {
 	    for (final URL url : this.urls) {
 		final URI absoluteURI = url.toURI().resolve(new URI(null, null, name + ".class", null));
@@ -30,7 +30,7 @@ public class URLClassParser {
 		    final DataInputStream dataInput = new DataInputStream(input);
 		    final Class parsedClass = parseClass(dataInput);
 		    if (dataInput.read() != -1) {
-			throw new ClassFormatError("Extra bytes at end of class");
+			throw new ClassFormatException("Extra bytes at end of class");
 		    }
 		    return parsedClass;
 		} catch (final FileNotFoundException e) {
@@ -43,21 +43,21 @@ public class URLClassParser {
 	}
     }
 
-    private Class parseClass(final DataInput dataInput) throws IOException, ClassFormatError {
+    private Class parseClass(final DataInput dataInput) throws IOException, ClassFormatException {
 	final int magic = dataInput.readInt();
 	if (magic != 0xcafebabe) {
-	    throw new ClassFormatError(String.format("Invalid magic number: 0x%08x", magic));
+	    throw new ClassFormatException(String.format("Invalid magic number: 0x%08x", magic));
 	}
 	final int minorVersion = dataInput.readUnsignedShort();
 	final int majorVersion = dataInput.readUnsignedShort();
 	if (majorVersion != 52 && minorVersion != 0) {
-	    throw new ClassFormatError("Unsupported version: " + majorVersion + "." + minorVersion);
+	    throw new ClassFormatException("Unsupported version: " + majorVersion + "." + minorVersion);
 	}
 	final ConstantPool constantPool = new ConstantPool(dataInput);
 	final int accessFlags = dataInput.readUnsignedShort();
-	final ClassConstant thisClass = constantPool.getClass(dataInput.readUnsignedShort());
-	final ClassConstant superClass = constantPool.getClass(dataInput.readUnsignedShort());
-	final ClassConstant[] interfaces = readInterfaces(dataInput, constantPool);
+	final ClassReference thisClass = constantPool.getClassReference(dataInput.readUnsignedShort());
+	final ClassReference superClass = constantPool.getClassReference(dataInput.readUnsignedShort());
+	final ClassReference[] interfaces = readInterfaces(dataInput, constantPool);
 	final Field[] fields = readFields(dataInput, constantPool);
 	final Method[] methods = readMethods(dataInput, constantPool);
 	String sourceFile = null;
@@ -72,18 +72,18 @@ public class URLClassParser {
 		break;
 	    case "SourceFile":
 		if (length != 2) {
-		    throw new ClassFormatError("Invalid SourceFile attribute length");
+		    throw new ClassFormatException("Invalid SourceFile attribute length");
 		}
 		sourceFile = constantPool.getUTF8(dataInput.readUnsignedShort());
 		break;
 	    case "Signature":
 		if (length != 2) {
-		    throw new ClassFormatError("Invalid Signature attribute length");
+		    throw new ClassFormatException("Invalid Signature attribute length");
 		}
 		signature = constantPool.getUTF8(dataInput.readUnsignedShort());
 		break;
 	    default:
-		throw new ClassFormatError("Unknown class attribute: " + name);
+		throw new ClassFormatException("Unknown class attribute: " + name);
 	    }
 	}
 	return new Class(constantPool, accessFlags, thisClass, superClass, interfaces, fields, methods, sourceFile,
@@ -91,7 +91,7 @@ public class URLClassParser {
     }
 
     private Method[] readMethods(final DataInput dataInput, final ConstantPool constantPool)
-	    throws IOException, ClassFormatError {
+	    throws IOException, ClassFormatException {
 	final Method[] methods = new Method[dataInput.readUnsignedShort()];
 	for (int i = 0; i < methods.length; i++) {
 	    methods[i] = readMethod(dataInput, constantPool);
@@ -100,13 +100,13 @@ public class URLClassParser {
     }
 
     private Method readMethod(final DataInput dataInput, final ConstantPool constantPool)
-	    throws IOException, ClassFormatError {
+	    throws IOException, ClassFormatException {
 	final int accessFlags = dataInput.readUnsignedShort();
 	final int nameIndex = dataInput.readUnsignedShort();
 	final int descriptorIndex = dataInput.readUnsignedShort();
 	final int attributes = dataInput.readUnsignedShort();
 	byte[] code = null;
-	final List<ClassConstant> exceptions = new ArrayList<>();
+	final List<ClassReference> exceptions = new ArrayList<>();
 	String signature = null;
 	for (int i = 0; i < attributes; i++) {
 	    final String name = constantPool.getUTF8(dataInput.readUnsignedShort());
@@ -119,17 +119,17 @@ public class URLClassParser {
 	    case "Exceptions":
 		final int exceptionLength = dataInput.readUnsignedShort();
 		for (int j = 0; j < exceptionLength; j++) {
-		    exceptions.add(constantPool.getClass(dataInput.readUnsignedShort()));
+		    exceptions.add(constantPool.getClassReference(dataInput.readUnsignedShort()));
 		}
 		break;
 	    case "Signature":
 		if (length != 2) {
-		    throw new ClassFormatError("Invalid Signature attribute length");
+		    throw new ClassFormatException("Invalid Signature attribute length");
 		}
 		signature = constantPool.getUTF8(dataInput.readUnsignedShort());
 		break;
 	    default:
-		throw new ClassFormatError("Unknown method attribute: " + name);
+		throw new ClassFormatException("Unknown method attribute: " + name);
 
 	    }
 	}
@@ -161,6 +161,13 @@ public class URLClassParser {
 		}
 		signature = constantPool.getUTF8(dataInput.readUnsignedShort());
 		break;
+	    case "ConstantValue": {
+		if (length != 2) {
+		    throw new IllegalStateException("Invalid Signature attribute length");
+		}
+		final int valueIndex = dataInput.readUnsignedShort();
+		break;
+	    }
 	    default:
 		throw new IllegalStateException("Unknown field attribute: " + name);
 	    }
@@ -168,11 +175,11 @@ public class URLClassParser {
 	return new Field(accessFlags, fieldName, descriptor, signature);
     }
 
-    private ClassConstant[] readInterfaces(final DataInput dataInput, final ConstantPool constantPool)
+    private ClassReference[] readInterfaces(final DataInput dataInput, final ConstantPool constantPool)
 	    throws IOException {
-	final ClassConstant[] interfaces = new ClassConstant[dataInput.readUnsignedShort()];
+	final ClassReference[] interfaces = new ClassReference[dataInput.readUnsignedShort()];
 	for (int i = 0; i < interfaces.length; i++) {
-	    interfaces[i] = constantPool.getClass(dataInput.readUnsignedShort());
+	    interfaces[i] = constantPool.getClassReference(dataInput.readUnsignedShort());
 	}
 	return interfaces;
     }

@@ -2,22 +2,22 @@ package bdc;
 
 import java.util.Arrays;
 
-import bdc.ConstantPool.ClassConstant;
+import bdc.ConstantPool.ClassReference;
 
 public class Class {
 
     private final ConstantPool constants;
     private final int accessFlags;
-    private final ClassConstant thisClass;
-    private final ClassConstant superClass;
-    private final ClassConstant[] interfaces;
+    private final ClassReference thisClass;
+    private final ClassReference superClass;
+    private final ClassReference[] interfaces;
     private final Field[] fields;
     private final Method[] methods;
     private final String sourceFile;
     private final String signature;
 
-    public Class(final ConstantPool constantPool, final int accessFlags, final ClassConstant thisClass,
-	    final ClassConstant superClass, final ClassConstant[] interfaces, final Field[] fields,
+    public Class(final ConstantPool constantPool, final int accessFlags, final ClassReference thisClass,
+	    final ClassReference superClass, final ClassReference[] interfaces, final Field[] fields,
 	    final Method[] methods, final String sourceFile, final String signature) {
 	this.constants = constantPool;
 	this.accessFlags = accessFlags;
@@ -31,7 +31,7 @@ public class Class {
 
     }
 
-    public ClassConstant getName() {
+    public ClassReference getName() {
 	return this.thisClass;
     }
 
