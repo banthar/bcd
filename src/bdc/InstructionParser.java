@@ -4,13 +4,13 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 
 import bdc.ConstantPool.ClassReference;
-import bdc.ConstantPool.InterfaceMethodReference;
 import bdc.ConstantPool.LongValueConstant;
 import bdc.ConstantPool.MethodReference;
 import bdc.ConstantPool.ValueConstant;
@@ -426,7 +426,6 @@ public class InstructionParser {
 		    final int defaultOffset = in.getInt() + opcodeOffset;
 		    final int low = in.getInt();
 		    final int high = in.getInt();
-		    final int n = high - low + 1;
 		    final Map<Integer, Integer> lookupTable = new HashMap<>();
 		    for (int i = low; i <= high; i++) {
 			final int offset = in.getInt() + opcodeOffset;
@@ -480,25 +479,24 @@ public class InstructionParser {
 		    break;
 		case 0xb6: {
 		    final MethodReference methodReference = constantPool.getMethodReference(getUnsignedShort(in));
-		    visitor.invokeVirtual(methodReference, stack.remove(),
-			    readMethodArguments(methodReference.getType(), stack)).forEach(stack::add);
+		    stack.addAll(visitor.invokeVirtual(methodReference, stack.remove(),
+			    readMethodArguments(methodReference.getType(), stack)));
 		    break;
 		}
 		case 0xb7: {
 		    final MethodReference methodReference = constantPool.getMethodReference(getUnsignedShort(in));
-		    visitor.invokeSpecial(methodReference, stack.remove(),
-			    readMethodArguments(methodReference.getType(), stack)).forEach(stack::add);
+		    stack.addAll(visitor.invokeSpecial(methodReference, stack.remove(),
+			    readMethodArguments(methodReference.getType(), stack)));
 		    break;
 		}
 		case 0xb8: {
 		    final MethodReference methodReference = constantPool.getMethodReference(getUnsignedShort(in));
-		    visitor.invokeStatic(methodReference, readMethodArguments(methodReference.getType(), stack))
-			    .forEach(stack::add);
+		    stack.addAll(visitor.invokeStatic(methodReference,
+			    readMethodArguments(methodReference.getType(), stack)));
 		    break;
 		}
 		case 0xb9: {
-		    final InterfaceMethodReference methodReference = constantPool
-			    .getInterfaceMethodReference(getUnsignedShort(in));
+		    final MethodReference methodReference = constantPool.getMethodReference(getUnsignedShort(in));
 		    final int count = getUnsignedByte(in);
 		    final int expectedCount = methodReference.getInvokeVirtualCount();
 		    if (count != expectedCount) {
@@ -508,8 +506,8 @@ public class InstructionParser {
 		    if (getUnsignedByte(in) != 0) {
 			throw new ClassFormatException("expected 0 byte after invokeinterface");
 		    }
-		    visitor.invokeInterface(methodReference, stack.remove(),
-			    readMethodArguments(methodReference.getType(), stack)).forEach(stack::add);
+		    stack.addAll(visitor.invokeInterface(methodReference, stack.remove(),
+			    readMethodArguments(methodReference.getType(), stack)));
 		    break;
 		}
 		case 0xba:
@@ -589,7 +587,11 @@ public class InstructionParser {
     }
 
     private static <T> List<T> readMethodArguments(final MethodType methodType, final Queue<T> stack) {
-	return null;
+	final List<T> arguments = new ArrayList<>();
+	for (final Type arg : methodType.getArgumentTypes()) {
+	    arguments.add(stack.remove());
+	}
+	return arguments;
     }
 
     private static <T> T loadConstant(final InstructionVisitor<T> visitor, final ConstantPool constantPool,

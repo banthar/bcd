@@ -42,7 +42,7 @@ public class ConstantPool {
 	case InterfaceMethodref: {
 	    final int classIndex = dataInput.readUnsignedShort();
 	    final int nameAndTypeIndex = dataInput.readUnsignedShort();
-	    return new InterfaceMethodReference(classIndex, nameAndTypeIndex);
+	    return new MethodReference(classIndex, nameAndTypeIndex);
 	}
 	case String: {
 	    final int stringIndex = dataInput.readUnsignedShort();
@@ -132,10 +132,6 @@ public class ConstantPool {
 	return (MethodReference) this.constants[index];
     }
 
-    public InterfaceMethodReference getInterfaceMethodReference(final int index) {
-	return (InterfaceMethodReference) this.constants[index];
-    }
-
     public String getUTF8(final int index) {
 	return (String) this.constants[index];
     }
@@ -177,11 +173,11 @@ public class ConstantPool {
 	}
     }
 
-    public class InterfaceMethodReference {
+    public class MethodReference {
 	private final int classIndex;
 	private final int nameAndTypeIndex;
 
-	public InterfaceMethodReference(final int classIndex, final int nameAndTypeIndex) {
+	public MethodReference(final int classIndex, final int nameAndTypeIndex) {
 	    this.classIndex = classIndex;
 	    this.nameAndTypeIndex = nameAndTypeIndex;
 	}
@@ -201,25 +197,6 @@ public class ConstantPool {
 		size += arg.getByteCodeSize();
 	    }
 	    return size;
-	}
-    }
-
-    public class MethodReference {
-	private final int classIndex;
-	private final int nameAndTypeIndex;
-
-	public MethodReference(final int classIndex, final int nameAndTypeIndex) {
-	    this.classIndex = classIndex;
-	    this.nameAndTypeIndex = nameAndTypeIndex;
-	}
-
-	@Override
-	public String toString() {
-	    return getClassReference(this.classIndex) + " " + getNameAndType(this.nameAndTypeIndex);
-	}
-
-	public MethodType getType() {
-	    return (MethodType) getNameAndType(this.nameAndTypeIndex).getType();
 	}
     }
 

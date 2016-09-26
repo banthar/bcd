@@ -9,7 +9,6 @@ import java.util.Map;
 
 import bdc.ConstantPool.ClassReference;
 import bdc.ConstantPool.FieldReference;
-import bdc.ConstantPool.InterfaceMethodReference;
 import bdc.ConstantPool.MethodReference;
 import bdc.InstructionPrinter.Register;
 import bdc.Type.FieldType;
@@ -190,18 +189,17 @@ public class InstructionPrinter implements InstructionVisitor<Register> {
 
     @Override
     public void storeStaticField(final FieldReference fieldReference, final Register value) {
-	instruction(fieldReference.getType(), "storeStaticField", fieldReference, value);
+	print("storeStaticField", fieldReference.getType(), fieldReference, value);
     }
 
     @Override
     public Register loadField(final FieldReference fieldReference, final Register target) {
-	throw new IllegalStateException();
-
+	return instruction(fieldReference.getType(), target, ".", fieldReference.getName());
     }
 
     @Override
     public void storeField(final FieldReference fieldReference, final Register target, final Register value) {
-	throw new IllegalStateException();
+	print("storeField", target, fieldReference.getName(), value);
 
     }
 
@@ -245,7 +243,7 @@ public class InstructionPrinter implements InstructionVisitor<Register> {
     }
 
     @Override
-    public List<Register> invokeInterface(final InterfaceMethodReference methodReference, final Register target,
+    public List<Register> invokeInterface(final MethodReference methodReference, final Register target,
 	    final List<Register> args) {
 	final MethodType methodType = methodReference.getType();
 	if (methodType.isVoid()) {

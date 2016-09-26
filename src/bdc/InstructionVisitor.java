@@ -5,7 +5,6 @@ import java.util.Map;
 
 import bdc.ConstantPool.ClassReference;
 import bdc.ConstantPool.FieldReference;
-import bdc.ConstantPool.InterfaceMethodReference;
 import bdc.ConstantPool.MethodReference;
 import bdc.Type.PrimitiveType;
 
@@ -101,7 +100,7 @@ public interface InstructionVisitor<T> {
 
     List<T> invokeStatic(MethodReference methodReference, List<T> args);
 
-    List<T> invokeInterface(InterfaceMethodReference methodReference, T target, List<T> args);
+    List<T> invokeInterface(MethodReference methodReference, T target, List<T> args);
 
     T newInstance(ClassReference classReference);
 
