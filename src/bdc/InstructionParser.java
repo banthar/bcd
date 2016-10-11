@@ -3,22 +3,21 @@ package bdc;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
+import java.util.function.Function;
 
+import bdc.BasicBlockBuilder.BinaryOperation;
+import bdc.BasicBlockBuilder.BitwiseOperationType;
+import bdc.BasicBlockBuilder.CompareType;
+import bdc.BasicBlockBuilder.Register;
+import bdc.BasicBlockBuilder.ShiftType;
 import bdc.ConstantPool.ClassReference;
 import bdc.ConstantPool.LongValueConstant;
 import bdc.ConstantPool.MethodReference;
 import bdc.ConstantPool.ValueConstant;
-import bdc.InstructionVisitor.BinaryOperation;
-import bdc.InstructionVisitor.BitwiseOperationType;
-import bdc.InstructionVisitor.CompareType;
-import bdc.InstructionVisitor.ShiftType;
-import bdc.Type.FieldType;
 import bdc.Type.MethodType;
 import bdc.Type.PrimitiveType;
 import bdc.Type.ReferenceType;
@@ -35,8 +34,8 @@ public class InstructionParser {
 	}
 	final byte[] instructionBytes = new byte[codeLength];
 	dataInput.readFully(instructionBytes);
-	parseInstructions(new InstructionPrinter(System.out), ByteBuffer.wrap(instructionBytes).asReadOnlyBuffer(),
-		constantPool, selfType, methodType);
+	parseInstructions(new MethodBuilder(), ByteBuffer.wrap(instructionBytes).asReadOnlyBuffer(), constantPool,
+		selfType, methodType);
 	final int exceptionLength = dataInput.readUnsignedShort();
 	for (int i = 0; i < exceptionLength; i++) {
 	    final int startPc = dataInput.readUnsignedShort();
@@ -69,27 +68,28 @@ public class InstructionParser {
 	}
     }
 
-    private static <T> void parseInstructions(final InstructionVisitor<T> visitor, final ByteBuffer in,
+    private static void parseInstructions(final MethodBuilder methodBuilder, final ByteBuffer in,
 	    final ConstantPool constantPool, final ReferenceType selfType, final MethodType methodType)
 	    throws ClassFormatException {
-	final Queue<T> stack = new ArrayDeque<>();
-	final HashMap<Integer, T> locals = new HashMap<>();
-	{
-	    int n = 0;
-	    locals.put(n++, visitor.nullConstant());
-	    for (final FieldType arg : methodType.getArgumentTypes()) {
-		locals.put(n++, visitor.nullConstant());
-	    }
-	}
+	final Map<Integer, BasicBlockBuilder> blocks = new HashMap<>();
 	while (in.position() < in.limit()) {
 	    final int opcodeOffset = in.position();
+	    final Function<Integer, BasicBlockBuilder> getBlock = t -> {
+		BasicBlockBuilder block = blocks.get(opcodeOffset);
+		if (block == null) {
+		    block = methodBuilder.createBasicBlock();
+		    blocks.put(opcodeOffset, block);
+		}
+		return block;
+	    };
+	    final BasicBlockBuilder block = getBlock.apply(opcodeOffset);
 	    try {
 		final int opcode = getUnsignedByte(in);
 		switch (opcode) {
 		case 0x0:
 		    break;
 		case 0x01:
-		    stack.add(visitor.nullConstant());
+		    block.push(block.nullConstant());
 		    break;
 		case 0x02:
 		case 0x03:
@@ -98,42 +98,42 @@ public class InstructionParser {
 		case 0x06:
 		case 0x07:
 		case 0x08:
-		    stack.add(visitor.integerConstant(opcode - 0x03));
+		    block.push(block.integerConstant(opcode - 0x03));
 		    break;
 		case 0x09:
 		case 0x0a:
-		    stack.add(visitor.longConstant(opcode - 0x09));
+		    block.push(block.longConstant(opcode - 0x09));
 		    break;
 		case 0x0b:
 		case 0x0c:
 		case 0x0d:
-		    stack.add(visitor.floatConstant(opcode - 0x0b));
+		    block.push(block.floatConstant(opcode - 0x0b));
 		    break;
 		case 0x0e:
 		case 0x0f:
-		    stack.add(visitor.doubleConstant(opcode - 0x0e));
+		    block.push(block.doubleConstant(opcode - 0x0e));
 		    break;
 		case 0x10:
-		    stack.add(visitor.integerConstant(in.get()));
+		    block.push(block.integerConstant(in.get()));
 		    break;
 		case 0x11:
-		    stack.add(visitor.integerConstant(in.getShort()));
+		    block.push(block.integerConstant(in.getShort()));
 		    break;
 		case 0x12:
-		    stack.add(loadConstant(visitor, constantPool, getUnsignedByte(in)));
+		    block.push(loadConstant(block, constantPool, getUnsignedByte(in)));
 		    break;
 		case 0x13:
-		    stack.add(loadConstant(visitor, constantPool, getUnsignedShort(in)));
+		    block.push(loadConstant(block, constantPool, getUnsignedShort(in)));
 		    break;
 		case 0x14:
-		    stack.add(loadLongConstant(visitor, constantPool, getUnsignedShort(in)));
+		    block.push(loadLongConstant(block, constantPool, getUnsignedShort(in)));
 		    break;
 		case 0x15:
 		case 0x16:
 		case 0x17:
 		case 0x18:
 		case 0x19:
-		    stack.add(locals.get(getUnsignedByte(in)));
+		    block.push(block.getLocal(getUnsignedByte(in)));
 		    break;
 		case 0x1a:
 		case 0x1b:
@@ -157,7 +157,7 @@ public class InstructionParser {
 		case 0x2d: {
 		    final int n = opcode - 0x1a;
 		    final PrimitiveType type = PrimitiveType.fromId(n / 4);
-		    stack.add(locals.get(n % 4));
+		    block.push(block.getLocal(n % 4));
 		    break;
 		}
 		case 0x2e:
@@ -169,7 +169,7 @@ public class InstructionParser {
 		case 0x34:
 		case 0x35: {
 		    final int n = opcode - 0x2e;
-		    stack.add(visitor.loadElement(PrimitiveType.fromId(n), stack.remove(), stack.remove()));
+		    block.push(block.loadElement(PrimitiveType.fromId(n), block.pop(), block.pop()));
 		    break;
 		}
 		case 0x36:
@@ -178,7 +178,7 @@ public class InstructionParser {
 		case 0x39:
 		case 0x3a: {
 		    final PrimitiveType type = PrimitiveType.fromId(opcode - 0x36);
-		    locals.put(getUnsignedByte(in), stack.remove());
+		    block.putLocal(getUnsignedByte(in), block.pop());
 		    break;
 		}
 		case 0x3b:
@@ -203,7 +203,7 @@ public class InstructionParser {
 		case 0x4e: {
 		    final int n = opcode - 0x3b;
 		    final PrimitiveType type = PrimitiveType.fromId(n / 4);
-		    locals.put(n % 4, stack.remove());
+		    block.putLocal(n % 4, block.pop());
 		    break;
 		}
 		case 0x4f:
@@ -214,78 +214,78 @@ public class InstructionParser {
 		case 0x54:
 		case 0x55:
 		case 0x56:
-		    visitor.storeElement(stack.remove(), stack.remove());
+		    block.storeElement(block.pop(), block.pop());
 		    break;
 		case 0x57:
-		    stack.remove();
+		    block.pop();
 		    break;
 		case 0x58:
 		    for (int i = 0; i < 2; i++) {
-			stack.remove();
+			block.pop();
 		    }
 		    break;
 		case 0x59: {
-		    final T value = stack.remove();
-		    stack.add(value);
-		    stack.add(value);
+		    final Register value = block.pop();
+		    block.push(value);
+		    block.push(value);
 		    break;
 		}
 		case 0x5a: {
-		    final T value0 = stack.remove();
-		    final T value1 = stack.remove();
-		    stack.add(value0);
-		    stack.add(value1);
-		    stack.add(value0);
+		    final Register value0 = block.pop();
+		    final Register value1 = block.pop();
+		    block.push(value0);
+		    block.push(value1);
+		    block.push(value0);
 		    break;
 		}
 		case 0x5b: {
-		    final T value0 = stack.remove();
-		    final T value1 = stack.remove();
-		    final T value2 = stack.remove();
-		    stack.add(value0);
-		    stack.add(value2);
-		    stack.add(value1);
-		    stack.add(value0);
+		    final Register value0 = block.pop();
+		    final Register value1 = block.pop();
+		    final Register value2 = block.pop();
+		    block.push(value0);
+		    block.push(value2);
+		    block.push(value1);
+		    block.push(value0);
 		    break;
 		}
 		case 0x5c: {
-		    final T value0 = stack.remove();
-		    final T value1 = stack.remove();
-		    stack.add(value1);
-		    stack.add(value0);
-		    stack.add(value1);
-		    stack.add(value0);
+		    final Register value0 = block.pop();
+		    final Register value1 = block.pop();
+		    block.push(value1);
+		    block.push(value0);
+		    block.push(value1);
+		    block.push(value0);
 		    break;
 		}
 		case 0x5d: {
-		    final T value0 = stack.remove();
-		    final T value1 = stack.remove();
-		    final T value2 = stack.remove();
-		    stack.add(value1);
-		    stack.add(value0);
-		    stack.add(value2);
-		    stack.add(value1);
-		    stack.add(value0);
+		    final Register value0 = block.pop();
+		    final Register value1 = block.pop();
+		    final Register value2 = block.pop();
+		    block.push(value1);
+		    block.push(value0);
+		    block.push(value2);
+		    block.push(value1);
+		    block.push(value0);
 		    break;
 		}
 		case 0x5e: {
-		    final T value0 = stack.remove();
-		    final T value1 = stack.remove();
-		    final T value2 = stack.remove();
-		    final T value3 = stack.remove();
-		    stack.add(value1);
-		    stack.add(value0);
-		    stack.add(value3);
-		    stack.add(value2);
-		    stack.add(value1);
-		    stack.add(value0);
+		    final Register value0 = block.pop();
+		    final Register value1 = block.pop();
+		    final Register value2 = block.pop();
+		    final Register value3 = block.pop();
+		    block.push(value1);
+		    block.push(value0);
+		    block.push(value3);
+		    block.push(value2);
+		    block.push(value1);
+		    block.push(value0);
 		    break;
 		}
 		case 0x5f: {
-		    final T value0 = stack.remove();
-		    final T value1 = stack.remove();
-		    stack.add(value0);
-		    stack.add(value1);
+		    final Register value0 = block.pop();
+		    final Register value1 = block.pop();
+		    block.push(value0);
+		    block.push(value1);
 		    break;
 		}
 		case 0x60:
@@ -311,7 +311,7 @@ public class InstructionParser {
 		    final int n = opcode - 0x60;
 		    final PrimitiveType type = PrimitiveType.fromId(n % 4);
 		    final BinaryOperation op = BinaryOperation.fromId(n / 4);
-		    stack.add(visitor.binaryOperation(type, op, stack.remove(), stack.remove()));
+		    block.push(block.binaryOperation(type, op, block.pop(), block.pop()));
 		    break;
 		}
 		case 0x74:
@@ -320,7 +320,7 @@ public class InstructionParser {
 		case 0x77: {
 		    final int n = opcode - 0x74;
 		    final PrimitiveType type = PrimitiveType.fromId(n);
-		    stack.add(visitor.negate(type, stack.remove()));
+		    block.push(block.negate(type, block.pop()));
 		    break;
 		}
 		case 0x78:
@@ -331,7 +331,7 @@ public class InstructionParser {
 		case 0x7d: {
 		    final int n = opcode - 0x78;
 		    final PrimitiveType type = PrimitiveType.fromId(n % 2);
-		    stack.add(visitor.shift(type, ShiftType.fromId(n / 2), stack.remove(), stack.remove()));
+		    block.push(block.shift(type, ShiftType.fromId(n / 2), block.pop(), block.pop()));
 		    break;
 		}
 		case 0x7e:
@@ -342,14 +342,14 @@ public class InstructionParser {
 		case 0x83: {
 		    final int n = opcode - 0x7e;
 		    final PrimitiveType type = PrimitiveType.fromId(n % 2);
-		    stack.add(visitor.bitwiseOperation(type, BitwiseOperationType.fromId(n / 2), stack.remove(),
-			    stack.remove()));
+		    block.push(
+			    block.bitwiseOperation(type, BitwiseOperationType.fromId(n / 2), block.pop(), block.pop()));
 		    break;
 		}
 		case 0x84: {
 		    final int index = getUnsignedByte(in);
-		    locals.put(index, visitor.binaryOperation(PrimitiveType.Integer, BinaryOperation.Add,
-			    locals.get(index), visitor.integerConstant(in.get())));
+		    block.putLocal(index, block.binaryOperation(PrimitiveType.Integer, BinaryOperation.Add,
+			    block.getLocal(index), block.integerConstant(in.get())));
 		    break;
 		}
 		case 0x85:
@@ -365,20 +365,20 @@ public class InstructionParser {
 		    final int fromType = n / 3;
 		    final int k = n % 3;
 		    final int toType = k <= fromType ? k + 1 : k;
-		    stack.add(visitor.convert(PrimitiveType.fromId(fromType), PrimitiveType.fromId(toType),
-			    stack.remove()));
+		    block.push(
+			    block.convert(PrimitiveType.fromId(fromType), PrimitiveType.fromId(toType), block.pop()));
 		    break;
 		}
 		case 0x94:
-		    stack.add(visitor.compare(PrimitiveType.Long, stack.remove(), stack.remove()));
+		    block.push(block.compare(PrimitiveType.Long, block.pop(), block.pop()));
 		    break;
 		case 0x95:
 		case 0x96:
-		    stack.add(visitor.compare(PrimitiveType.Float, stack.remove(), stack.remove()));
+		    block.push(block.compare(PrimitiveType.Float, block.pop(), block.pop()));
 		    break;
 		case 0x97:
 		case 0x98:
-		    stack.add(visitor.compare(PrimitiveType.Double, stack.remove(), stack.remove()));
+		    block.push(block.compare(PrimitiveType.Double, block.pop(), block.pop()));
 		    break;
 		case 0x99:
 		case 0x9a:
@@ -386,9 +386,11 @@ public class InstructionParser {
 		case 0x9c:
 		case 0x9d:
 		case 0x9e: {
-		    final CompareType compareType = InstructionVisitor.CompareType.fromId(opcode - 0x99);
-		    visitor.jumpIf(PrimitiveType.Integer, in.getShort() + opcodeOffset, compareType, stack.remove(),
-			    visitor.integerConstant(0));
+		    final CompareType compareType = BasicBlockBuilder.CompareType.fromId(opcode - 0x99);
+		    final BasicBlockBuilder then = getBlock.apply(in.getShort() + opcodeOffset);
+		    final BasicBlockBuilder otherwise = getBlock.apply(in.position());
+		    block.jumpIf(PrimitiveType.Integer, then, otherwise, compareType, block.pop(),
+			    block.integerConstant(0));
 		    break;
 		}
 		case 0x9f:
@@ -397,20 +399,22 @@ public class InstructionParser {
 		case 0xa2:
 		case 0xa3:
 		case 0xa4: {
-		    final CompareType compareType = InstructionVisitor.CompareType.fromId(opcode - 0x9f);
-		    visitor.jumpIf(PrimitiveType.Integer, in.getShort() + opcodeOffset, compareType, stack.remove(),
-			    stack.remove());
+		    final CompareType compareType = BasicBlockBuilder.CompareType.fromId(opcode - 0x9f);
+		    final BasicBlockBuilder then = getBlock.apply(in.getShort() + opcodeOffset);
+		    final BasicBlockBuilder otherwise = getBlock.apply(in.position());
+		    block.jumpIf(PrimitiveType.Integer, then, otherwise, compareType, block.pop(), block.pop());
 		    break;
 		}
 		case 0xa5:
 		case 0xa6: {
-		    final CompareType compareType = InstructionVisitor.CompareType.fromId(opcode - 0xa5);
-		    visitor.jumpIf(PrimitiveType.Reference, in.getShort() + opcodeOffset, compareType, stack.remove(),
-			    stack.remove());
+		    final CompareType compareType = BasicBlockBuilder.CompareType.fromId(opcode - 0xa5);
+		    final BasicBlockBuilder then = getBlock.apply(in.getShort() + opcodeOffset);
+		    final BasicBlockBuilder otherwise = getBlock.apply(in.position());
+		    block.jumpIf(PrimitiveType.Reference, then, otherwise, compareType, block.pop(), block.pop());
 		    break;
 		}
 		case 0xa7: {
-		    visitor.jump(in.getShort() + opcodeOffset);
+		    block.jump(getBlock.apply(in.getShort() + opcodeOffset));
 		    break;
 		}
 		case 0xa8:
@@ -431,7 +435,7 @@ public class InstructionParser {
 			final int offset = in.getInt() + opcodeOffset;
 			lookupTable.put(i, offset);
 		    }
-		    visitor.jumpTable(stack.remove(), defaultOffset, lookupTable);
+		    block.jumpTable(block.pop(), defaultOffset, lookupTable);
 		    break;
 		}
 		case 0xab: {
@@ -448,7 +452,7 @@ public class InstructionParser {
 			final int offset = in.getInt() + opcodeOffset;
 			lookupTable.put(match, offset);
 		    }
-		    visitor.jumpTable(stack.remove(), defaultOffset, lookupTable);
+		    block.jumpTable(block.pop(), defaultOffset, lookupTable);
 		    break;
 		}
 		case 0xac:
@@ -457,42 +461,50 @@ public class InstructionParser {
 		case 0xaf:
 		case 0xb0: {
 		    final int n = opcode - 0xac;
-		    visitor.returnValue(PrimitiveType.fromId(n), stack.remove());
+		    block.returnValue(PrimitiveType.fromId(n), block.pop());
 		    break;
 		}
 		case 0xb1:
-		    visitor.returnVoid();
+		    block.returnVoid();
 		    break;
 
 		case 0xb2:
-		    stack.add(visitor.loadStaticField(constantPool.getFieldReference(getUnsignedShort(in))));
+		    block.push(block.loadStaticField(constantPool.getFieldReference(getUnsignedShort(in))));
 		    break;
 		case 0xb3:
-		    visitor.storeStaticField(constantPool.getFieldReference(getUnsignedShort(in)), stack.remove());
+		    block.storeStaticField(constantPool.getFieldReference(getUnsignedShort(in)), block.pop());
 		    break;
 		case 0xb4:
-		    stack.add(visitor.loadField(constantPool.getFieldReference(getUnsignedShort(in)), stack.remove()));
+		    block.push(block.loadField(constantPool.getFieldReference(getUnsignedShort(in)), block.pop()));
 		    break;
 		case 0xb5:
-		    visitor.storeField(constantPool.getFieldReference(getUnsignedShort(in)), stack.remove(),
-			    stack.remove());
+		    block.storeField(constantPool.getFieldReference(getUnsignedShort(in)), block.pop(), block.pop());
 		    break;
 		case 0xb6: {
 		    final MethodReference methodReference = constantPool.getMethodReference(getUnsignedShort(in));
-		    stack.addAll(visitor.invokeVirtual(methodReference, stack.remove(),
-			    readMethodArguments(methodReference.getType(), stack)));
+		    final List<Register> returned = block.invokeVirtual(methodReference, block.pop(),
+			    readMethodArguments(methodReference.getType(), block));
+		    for (final Register value : returned) {
+			block.push(value);
+		    }
 		    break;
 		}
 		case 0xb7: {
 		    final MethodReference methodReference = constantPool.getMethodReference(getUnsignedShort(in));
-		    stack.addAll(visitor.invokeSpecial(methodReference, stack.remove(),
-			    readMethodArguments(methodReference.getType(), stack)));
+		    final List<Register> returned = block.invokeSpecial(methodReference, block.pop(),
+			    readMethodArguments(methodReference.getType(), block));
+		    for (final Register value : returned) {
+			block.push(value);
+		    }
 		    break;
 		}
 		case 0xb8: {
 		    final MethodReference methodReference = constantPool.getMethodReference(getUnsignedShort(in));
-		    stack.addAll(visitor.invokeStatic(methodReference,
-			    readMethodArguments(methodReference.getType(), stack)));
+		    final List<Register> returned = block.invokeStatic(methodReference,
+			    readMethodArguments(methodReference.getType(), block));
+		    for (final Register value : returned) {
+			block.push(value);
+		    }
 		    break;
 		}
 		case 0xb9: {
@@ -506,49 +518,52 @@ public class InstructionParser {
 		    if (getUnsignedByte(in) != 0) {
 			throw new ClassFormatException("expected 0 byte after invokeinterface");
 		    }
-		    stack.addAll(visitor.invokeInterface(methodReference, stack.remove(),
-			    readMethodArguments(methodReference.getType(), stack)));
+		    final List<Register> returned = block.invokeInterface(methodReference, block.pop(),
+			    readMethodArguments(methodReference.getType(), block));
+		    for (final Register value : returned) {
+			block.push(value);
+		    }
 		    break;
 		}
 		case 0xba:
 		    throw new ClassFormatException("invokedynamic instruction not supported");
 		case 0xbb:
-		    stack.add(visitor.newInstance(constantPool.getClassReference(getUnsignedShort(in))));
+		    block.push(block.newInstance(constantPool.getClassReference(getUnsignedShort(in))));
 		    break;
 		case 0xbc: {
 		    final PrimitiveType type = PrimitiveType.fromArrayTypeId(getUnsignedByte(in));
-		    stack.add(visitor.newPrimitiveArray(type, stack.remove()));
+		    block.push(block.newPrimitiveArray(type, block.pop()));
 		    break;
 		}
 		case 0xbd: {
 		    final ClassReference type = constantPool.getClassReference(getUnsignedShort(in));
-		    stack.add(visitor.newArray(type, stack.remove()));
+		    block.push(block.newArray(type, block.pop()));
 		    break;
 		}
 		case 0xbe: {
-		    stack.add(visitor.arrayLength(stack.remove()));
+		    block.push(block.arrayLength(block.pop()));
 		    break;
 		}
 		case 0xbf: {
-		    visitor.returnError(stack.remove());
+		    block.returnError(block.pop());
 		    break;
 		}
 		case 0xc0: {
 		    final ClassReference type = constantPool.getClassReference(getUnsignedShort(in));
-		    stack.add(visitor.checkedCast(type, stack.remove()));
+		    block.push(block.checkedCast(type, block.pop()));
 		    break;
 		}
 		case 0xc1: {
 		    final ClassReference type = constantPool.getClassReference(getUnsignedShort(in));
-		    stack.add(visitor.instanceOf(type, stack.remove()));
+		    block.push(block.instanceOf(type, block.pop()));
 		    break;
 		}
 		case 0xc2: {
-		    visitor.monitorEnter(stack.remove());
+		    block.monitorEnter(block.pop());
 		    break;
 		}
 		case 0xc3: {
-		    visitor.monitorExit(stack.remove());
+		    block.monitorExit(block.pop());
 		    break;
 		}
 		case 0xc4:
@@ -557,13 +572,15 @@ public class InstructionParser {
 		    throw new ClassFormatException("multianewarray instruction not supported");
 		case 0xc6:
 		case 0xc7: {
-		    final CompareType compareType = InstructionVisitor.CompareType.fromId(opcode - 0xc6);
-		    visitor.jumpIf(PrimitiveType.Reference, in.getShort() + opcodeOffset, compareType, stack.remove(),
-			    visitor.nullConstant());
+		    final CompareType compareType = BasicBlockBuilder.CompareType.fromId(opcode - 0xc6);
+		    final BasicBlockBuilder then = getBlock.apply(in.getShort() + opcodeOffset);
+		    final BasicBlockBuilder otherwise = getBlock.apply(in.position());
+		    block.jumpIf(PrimitiveType.Reference, then, otherwise, compareType, block.pop(),
+			    block.nullConstant());
 		    break;
 		}
 		case 0xc8:
-		    visitor.jump(in.getInt() + opcodeOffset);
+		    block.jump(getBlock.apply(in.getInt() + opcodeOffset));
 		    break;
 		case 0xc9:
 		    throw new ClassFormatException("jsr_w instruction not supported");
@@ -583,18 +600,22 @@ public class InstructionParser {
 		}
 		throw new ClassFormatException("Invalid bytecode: " + buf + ": " + e.getMessage(), e);
 	    }
+	    if (!block.isTerminated()) {
+		block.jump(getBlock.apply(in.position()));
+	    }
 	}
+	System.out.println(blocks);
     }
 
-    private static <T> List<T> readMethodArguments(final MethodType methodType, final Queue<T> stack) {
-	final List<T> arguments = new ArrayList<>();
+    private static List<Register> readMethodArguments(final MethodType methodType, final BasicBlockBuilder stack) {
+	final List<Register> arguments = new ArrayList<>();
 	for (final Type arg : methodType.getArgumentTypes()) {
-	    arguments.add(stack.remove());
+	    arguments.add(stack.pop());
 	}
 	return arguments;
     }
 
-    private static <T> T loadConstant(final InstructionVisitor<T> visitor, final ConstantPool constantPool,
+    private static Register loadConstant(final BasicBlockBuilder visitor, final ConstantPool constantPool,
 	    final int index) throws ClassFormatException {
 	final Object value = constantPool.get(index);
 	if (value instanceof ValueConstant) {
@@ -604,7 +625,7 @@ public class InstructionParser {
 	}
     }
 
-    private static <T> T loadLongConstant(final InstructionVisitor<T> visitor, final ConstantPool constantPool,
+    private static Register loadLongConstant(final BasicBlockBuilder visitor, final ConstantPool constantPool,
 	    final int index) throws ClassFormatException {
 	final Object value = constantPool.get(index);
 	if (value instanceof LongValueConstant) {

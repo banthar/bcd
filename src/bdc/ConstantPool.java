@@ -4,6 +4,7 @@ import java.io.DataInput;
 import java.io.IOException;
 import java.util.Arrays;
 
+import bdc.BasicBlockBuilder.Register;
 import bdc.Type.FieldType;
 import bdc.Type.MethodType;
 import bdc.Type.ReferenceType;
@@ -46,48 +47,23 @@ public class ConstantPool {
 	}
 	case String: {
 	    final int stringIndex = dataInput.readUnsignedShort();
-	    return new ValueConstant() {
-		@Override
-		public <T> T visit(final InstructionVisitor<T> visitor) {
-		    return visitor.stringConstant(getUTF8(stringIndex));
-		}
-	    };
+	    return (ValueConstant) visitor -> visitor.stringConstant(getUTF8(stringIndex));
 	}
 	case Integer: {
 	    final int value = dataInput.readInt();
-	    return new ValueConstant() {
-		@Override
-		public <T> T visit(final InstructionVisitor<T> visitor) {
-		    return visitor.integerConstant(value);
-		}
-	    };
+	    return (ValueConstant) visitor -> visitor.integerConstant(value);
 	}
 	case Float: {
 	    final float value = dataInput.readFloat();
-	    return new ValueConstant() {
-		@Override
-		public <T> T visit(final InstructionVisitor<T> visitor) {
-		    return visitor.floatConstant(value);
-		}
-	    };
+	    return (ValueConstant) visitor -> visitor.floatConstant(value);
 	}
 	case Long: {
 	    final long value = dataInput.readLong();
-	    return new LongValueConstant() {
-		@Override
-		public <T> T visit(final InstructionVisitor<T> visitor) {
-		    return visitor.longConstant(value);
-		}
-	    };
+	    return (LongValueConstant) visitor -> visitor.longConstant(value);
 	}
 	case Double: {
 	    final double value = dataInput.readDouble();
-	    return new LongValueConstant() {
-		@Override
-		public <T> T visit(final InstructionVisitor<T> visitor) {
-		    return visitor.doubleConstant(value);
-		}
-	    };
+	    return (LongValueConstant) visitor -> visitor.doubleConstant(value);
 	}
 	case NameAndType: {
 	    final int nameIndex = dataInput.readUnsignedShort();
@@ -250,10 +226,10 @@ public class ConstantPool {
     }
 
     public interface ValueConstant {
-	<T> T visit(InstructionVisitor<T> visitor);
+	Register visit(BasicBlockBuilder visitor);
     }
 
     public interface LongValueConstant {
-	<T> T visit(InstructionVisitor<T> visitor);
+	Register visit(BasicBlockBuilder visitor);
     }
 }

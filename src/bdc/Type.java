@@ -12,6 +12,20 @@ public interface Type {
 	int getByteCodeSize();
     }
 
+    public enum UnknownType implements FieldType {
+	INSTANCE;
+
+	@Override
+	public String getJavaName() {
+	    return "?";
+	}
+
+	@Override
+	public int getByteCodeSize() {
+	    return 1;
+	}
+    }
+
     public enum PrimitiveType implements FieldType {
 	Integer("int"), Long("long"), Float("float"), Double("double"), Reference("Object"), Byte("byte"), Char(
 		"char"), Short("short"), Boolean("boolean");
@@ -230,5 +244,9 @@ public interface Type {
 	builder.append(": ");
 	builder.append(message);
 	return new ClassFormatException(builder.toString());
+    }
+
+    static FieldType getUnknown() {
+	return UnknownType.INSTANCE;
     }
 }
