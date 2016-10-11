@@ -1,8 +1,12 @@
 package bdc;
 
+import java.io.PrintStream;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -68,12 +72,9 @@ public class BasicBlockBuilder {
 	}
     }
 
-    public BasicBlockBuilder() {
-    }
-
     private int index = 0;
-    private final List<Object> instructions = new ArrayList<>();
-    private Object terminator = null;
+    private final List<List<Object>> instructions = new ArrayList<>();
+    private List<Object> terminator = null;
 
     public void putLocal(final int id, final Register value) {
 	print("store_local", id, value);
@@ -304,23 +305,52 @@ public class BasicBlockBuilder {
 	return this.terminator != null;
     }
 
-    private boolean printing = false;
-
-    @Override
-    public String toString() {
-	if (this.printing) {
-	    return "...";
-	}
-	this.printing = true;
-	try {
-	    String out = "\n";
-	    for (final Object s : this.instructions) {
-		out += "    " + s + "\n";
+    public void dump(final PrintStream out) {
+	int n = 0;
+	final HashMap<BasicBlockBuilder, Integer> printed = new HashMap<>();
+	final Deque<BasicBlockBuilder> toPrint = new ArrayDeque<>();
+	toPrint.add(this);
+	printed.put(this, n++);
+	while (!toPrint.isEmpty()) {
+	    final BasicBlockBuilder block = toPrint.removeFirst();
+	    final List<List<Object>> d = new ArrayList<>();
+	    d.addAll(block.instructions);
+	    d.add(block.terminator);
+	    out.print("  \"block" + printed.get(block) + "\" [");
+	    out.print("shape = \"record\" label = \"<start> #" + printed.get(block));
+	    out.print("|");
+	    for (final List<Object> instruction : block.instructions) {
+		for (final Object opcode : instruction) {
+		    out.print(" ");
+		    out.print(opcode);
+		}
+		out.print("|");
 	    }
-	    out += "    " + this.terminator + "\n";
-	    return out;
-	} finally {
-	    this.printing = false;
+	    out.print("<end>");
+	    for (final Object opcode : block.terminator) {
+		out.print(" ");
+		if (opcode instanceof BasicBlockBuilder) {
+		    Integer blockId = printed.get(opcode);
+		    if (blockId == null) {
+			blockId = n++;
+			toPrint.add((BasicBlockBuilder) opcode);
+		    }
+		    printed.put((BasicBlockBuilder) opcode, blockId);
+		    out.print(blockId);
+
+		} else {
+		    out.print(opcode);
+		}
+	    }
+	    out.println("\"];");
+	}
+	for (final BasicBlockBuilder bbb : printed.keySet()) {
+	    for (final Object opcode : bbb.terminator) {
+		if (opcode instanceof BasicBlockBuilder) {
+		    out.println("  \"block" + printed.get(bbb) + "\":end -> " + "\"block" + printed.get(opcode)
+			    + "\":start;");
+		}
+	    }
 	}
     }
 }

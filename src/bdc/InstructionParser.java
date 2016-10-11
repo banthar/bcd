@@ -24,7 +24,7 @@ import bdc.Type.ReferenceType;
 
 public class InstructionParser {
 
-    public static void parseCode(final DataInputStream dataInput, final ConstantPool constantPool,
+    public static BasicBlockBuilder parseCode(final DataInputStream dataInput, final ConstantPool constantPool,
 	    final ReferenceType selfType, final MethodType methodType) throws IOException, ClassFormatException {
 	final int maxStack = dataInput.readUnsignedShort();
 	final int maxLocals = dataInput.readUnsignedShort();
@@ -34,8 +34,8 @@ public class InstructionParser {
 	}
 	final byte[] instructionBytes = new byte[codeLength];
 	dataInput.readFully(instructionBytes);
-	parseInstructions(new MethodBuilder(), ByteBuffer.wrap(instructionBytes).asReadOnlyBuffer(), constantPool,
-		selfType, methodType);
+	final BasicBlockBuilder block = parseInstructions(new MethodBuilder(),
+		ByteBuffer.wrap(instructionBytes).asReadOnlyBuffer(), constantPool, selfType, methodType);
 	final int exceptionLength = dataInput.readUnsignedShort();
 	for (int i = 0; i < exceptionLength; i++) {
 	    final int startPc = dataInput.readUnsignedShort();
@@ -66,22 +66,23 @@ public class InstructionParser {
 
 	    }
 	}
+	return block;
     }
 
-    private static void parseInstructions(final MethodBuilder methodBuilder, final ByteBuffer in,
+    private static BasicBlockBuilder parseInstructions(final MethodBuilder methodBuilder, final ByteBuffer in,
 	    final ConstantPool constantPool, final ReferenceType selfType, final MethodType methodType)
 	    throws ClassFormatException {
 	final Map<Integer, BasicBlockBuilder> blocks = new HashMap<>();
+	final Function<Integer, BasicBlockBuilder> getBlock = id -> {
+	    BasicBlockBuilder block = blocks.get(id);
+	    if (block == null) {
+		block = methodBuilder.createBasicBlock();
+		blocks.put(id, block);
+	    }
+	    return block;
+	};
 	while (in.position() < in.limit()) {
 	    final int opcodeOffset = in.position();
-	    final Function<Integer, BasicBlockBuilder> getBlock = t -> {
-		BasicBlockBuilder block = blocks.get(opcodeOffset);
-		if (block == null) {
-		    block = methodBuilder.createBasicBlock();
-		    blocks.put(opcodeOffset, block);
-		}
-		return block;
-	    };
 	    final BasicBlockBuilder block = getBlock.apply(opcodeOffset);
 	    try {
 		final int opcode = getUnsignedByte(in);
@@ -604,7 +605,7 @@ public class InstructionParser {
 		block.jump(getBlock.apply(in.position()));
 	    }
 	}
-	System.out.println(blocks);
+	return getBlock.apply(0);
     }
 
     private static List<Register> readMethodArguments(final MethodType methodType, final BasicBlockBuilder stack) {
