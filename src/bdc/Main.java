@@ -12,7 +12,8 @@ public class Main {
 	for (final Method m : c.getMethods()) {
 	    if (args[1].equals(m.getName())) {
 		System.out.println("digraph \"" + m.getName() + "\" {");
-		System.out.println("  graph [rankdir = \"LR\"];");
+		System.out
+			.println("  graph [rankdir = \"LR\", splines = polyline, sep = \"+30,30\", overlap = false];");
 		m.parse(c.getConstantPool());
 		System.out.println("}");
 		break;
