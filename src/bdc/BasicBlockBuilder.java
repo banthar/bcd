@@ -285,7 +285,8 @@ public class BasicBlockBuilder {
 	    input.add(target);
 	}
 	input.addAll(args);
-	final Operation operation = new Operation(Arrays.asList(type, methodReference), 1, input);
+	final Operation operation = new Operation(Arrays.asList(type, methodReference), methodType.isVoid() ? 1 : 2,
+		input);
 	this.environment = operation.getOutput(0);
 	if (methodType.isVoid()) {
 	    return Collections.emptyList();
