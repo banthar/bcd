@@ -7,9 +7,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import bdc.ConstantPool.ClassReference;
 import bdc.ConstantPool.FieldReference;
@@ -117,20 +119,29 @@ public class BasicBlockBuilder {
     }
 
     interface Terminator {
-	Iterable<? extends BasicBlockBuilder> targets();
+	List<? extends BasicBlockBuilder> getTargets();
 
 	List<Register> getInput();
 
 	List<? extends Object> getDescription();
     }
 
-    private final List<BasicBlockBuilder> sources = new ArrayList<>();
-    private Register environment = new Register() {
+    class RegisterReference implements Register {
+	Register target;
+
 	@Override
 	public <T> T dump(final InstructionPrinter<T> printer) {
-	    return null;
+	    if (this.target != null) {
+		return this.target.dump(printer);
+	    } else {
+		return null;
+	    }
 	}
-    };
+    }
+
+    private final Set<BasicBlockBuilder> sources = new HashSet<>();
+    private final RegisterReference inputEnvironment = new RegisterReference();
+    private Register environment = this.inputEnvironment;
     private Terminator terminator = null;
 
     public void putLocal(final int id, final Register value) {
@@ -335,7 +346,7 @@ public class BasicBlockBuilder {
 	}
 
 	@Override
-	public Iterable<? extends BasicBlockBuilder> targets() {
+	public List<? extends BasicBlockBuilder> getTargets() {
 	    return Collections.emptyList();
 	}
 
@@ -366,7 +377,7 @@ public class BasicBlockBuilder {
 	}
 
 	@Override
-	public Iterable<? extends BasicBlockBuilder> targets() {
+	public List<? extends BasicBlockBuilder> getTargets() {
 	    return Collections.emptyList();
 	}
 
@@ -403,7 +414,7 @@ public class BasicBlockBuilder {
 	}
 
 	@Override
-	public Iterable<? extends BasicBlockBuilder> targets() {
+	public List<? extends BasicBlockBuilder> getTargets() {
 	    return Arrays.asList(this.then, this.otherwise);
 	}
 
@@ -439,7 +450,7 @@ public class BasicBlockBuilder {
 	}
 
 	@Override
-	public Iterable<? extends BasicBlockBuilder> targets() {
+	public List<? extends BasicBlockBuilder> getTargets() {
 	    return Arrays.asList(this.target);
 	}
 
@@ -470,7 +481,7 @@ public class BasicBlockBuilder {
 	}
 
 	@Override
-	public Iterable<? extends BasicBlockBuilder> targets() {
+	public List<? extends BasicBlockBuilder> getTargets() {
 	    return Collections.emptyList();
 	}
 
@@ -493,23 +504,49 @@ public class BasicBlockBuilder {
 	if (this.terminator != null || this.environment == null) {
 	    throw new IllegalStateException();
 	}
-	for (final BasicBlockBuilder target : terminator.targets()) {
-	    target.addSource(this);
-	}
 	this.terminator = terminator;
 	this.environment = null;
-    }
-
-    private void addSource(final BasicBlockBuilder source) {
-	this.sources.add(source);
-    }
-
-    public Iterable<BasicBlockBuilder> getSources() {
-	return this.sources;
+	for (final BasicBlockBuilder target : terminator.getTargets()) {
+	    target.sources.add(this);
+	}
     }
 
     public boolean isTerminated() {
 	return this.terminator != null;
+    }
+
+    public void removeDirectJumps() {
+	removeDirectJumps(new HashSet<>());
+    }
+
+    private void removeDirectJumps(final HashSet<BasicBlockBuilder> visited) {
+	if (visited.add(this)) {
+	    while (true) {
+		if (this.terminator.getTargets().size() == 1) {
+		    final BasicBlockBuilder target = this.terminator.getTargets().get(0);
+		    if (target.sources.size() == 1) {
+			if (!target.sources.contains(this)) {
+			    throw new IllegalStateException();
+			}
+			target.inputEnvironment.target = this.terminator.getInput().get(0);
+			this.terminator = target.terminator;
+			for (final BasicBlockBuilder newTarget : this.terminator.getTargets()) {
+			    if (!newTarget.sources.remove(target)) {
+				throw new IllegalStateException();
+			    }
+			    if (!newTarget.sources.add(this)) {
+				throw new IllegalStateException();
+			    }
+			}
+			continue;
+		    }
+		}
+		break;
+	    }
+	    for (final BasicBlockBuilder target : this.terminator.getTargets()) {
+		target.removeDirectJumps(visited);
+	    }
+	}
     }
 
     public void dump(final PrintStream out) {
@@ -561,7 +598,7 @@ public class BasicBlockBuilder {
 	    out.print(block.terminator.getDescription());
 	    out.print(" ");
 	    out.print(inputRegisters);
-	    for (final BasicBlockBuilder opcode : block.terminator.targets()) {
+	    for (final BasicBlockBuilder opcode : block.terminator.getTargets()) {
 		out.print(" ");
 		Integer blockId = printed.get(opcode);
 		if (blockId == null) {
@@ -574,7 +611,7 @@ public class BasicBlockBuilder {
 	    out.println("\"];");
 	}
 	for (final BasicBlockBuilder bbb : printed.keySet()) {
-	    for (final BasicBlockBuilder opcode : bbb.terminator.targets()) {
+	    for (final BasicBlockBuilder opcode : bbb.terminator.getTargets()) {
 		out.println(
 			" \"block" + printed.get(bbb) + "\":end -> " + "\"block" + printed.get(opcode) + "\":start;");
 	    }
