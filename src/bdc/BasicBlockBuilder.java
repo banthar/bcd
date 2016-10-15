@@ -528,6 +528,9 @@ public class BasicBlockBuilder {
 			if (!target.sources.contains(this)) {
 			    throw new IllegalStateException();
 			}
+			if (this.terminator.getInput().size() != 1) {
+			    throw new IllegalStateException();
+			}
 			target.inputEnvironment.target = this.terminator.getInput().get(0);
 			this.terminator = target.terminator;
 			for (final BasicBlockBuilder newTarget : this.terminator.getTargets()) {
