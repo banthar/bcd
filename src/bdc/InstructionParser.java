@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-import bdc.BasicBlockBuilder.BinaryOperation;
+import bdc.BasicBlockBuilder.BinaryOperationType;
 import bdc.BasicBlockBuilder.BitwiseOperationType;
 import bdc.BasicBlockBuilder.CompareType;
 import bdc.BasicBlockBuilder.Register;
@@ -311,7 +311,7 @@ public class InstructionParser {
 		case 0x73: {
 		    final int n = opcode - 0x60;
 		    final PrimitiveType type = PrimitiveType.fromId(n % 4);
-		    final BinaryOperation op = BinaryOperation.fromId(n / 4);
+		    final BinaryOperationType op = BinaryOperationType.fromId(n / 4);
 		    block.push(block.binaryOperation(type, op, block.pop(), block.pop()));
 		    break;
 		}
@@ -349,7 +349,7 @@ public class InstructionParser {
 		}
 		case 0x84: {
 		    final int index = getUnsignedByte(in);
-		    block.putLocal(index, block.binaryOperation(PrimitiveType.Integer, BinaryOperation.Add,
+		    block.putLocal(index, block.binaryOperation(PrimitiveType.Integer, BinaryOperationType.Add,
 			    block.getLocal(index), block.integerConstant(in.get())));
 		    break;
 		}

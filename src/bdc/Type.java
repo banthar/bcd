@@ -249,4 +249,12 @@ public interface Type {
     static FieldType getUnknown() {
 	return UnknownType.INSTANCE;
     }
+
+    static Type string() {
+	try {
+	    return fromDescriptor("Ljava/lang/String;");
+	} catch (final ClassFormatException e) {
+	    throw new IllegalStateException();
+	}
+    }
 }
