@@ -8,13 +8,15 @@ public class Main {
     public static void main(final String[] args) throws Exception {
 	final File bin = new File("bin");
 	final URLClassParser bytecodeLoader = new URLClassParser(new URL[] { bin.toURI().toURL() });
-	final Class c = bytecodeLoader.loadClass("bdc/test/Test");
+	final Class c = bytecodeLoader.loadClass(args[0]);
 	for (final Method m : c.getMethods()) {
-	    System.out.println("digraph \"" + m.getName() + "\" {");
-	    System.out.println("  graph [rankdir = \"LR\"];");
-	    m.parse(c.getConstantPool());
-	    System.out.println("}");
-	    break;
+	    if (args[1].equals(m.getName())) {
+		System.out.println("digraph \"" + m.getName() + "\" {");
+		System.out.println("  graph [rankdir = \"LR\"];");
+		m.parse(c.getConstantPool());
+		System.out.println("}");
+		break;
+	    }
 	}
     }
 
