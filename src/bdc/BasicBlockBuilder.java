@@ -9,6 +9,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -119,8 +120,6 @@ public class BasicBlockBuilder {
     }
 
     interface Terminator {
-	List<? extends BasicBlockBuilder> getTargets();
-
 	List<Register> getInput();
 
 	List<? extends Object> getDescription();
@@ -139,10 +138,11 @@ public class BasicBlockBuilder {
 	}
     }
 
-    private final Set<BasicBlockBuilder> sources = new HashSet<>();
     private final RegisterReference inputEnvironment = new RegisterReference();
     private Register environment = this.inputEnvironment;
     private Terminator terminator = null;
+    private Set<BasicBlockBuilder> jumpsOut = new HashSet<>();
+    private final Set<BasicBlockBuilder> jumpsIn = new HashSet<>();
 
     public void putLocal(final int id, final Register value) {
 	final Operation operation = new Operation(Arrays.asList("store_local", id), 1, this.environment, value);
@@ -346,11 +346,6 @@ public class BasicBlockBuilder {
 	}
 
 	@Override
-	public List<? extends BasicBlockBuilder> getTargets() {
-	    return Collections.emptyList();
-	}
-
-	@Override
 	public List<? extends Object> getDescription() {
 	    return this.description;
 	}
@@ -377,11 +372,6 @@ public class BasicBlockBuilder {
 	}
 
 	@Override
-	public List<? extends BasicBlockBuilder> getTargets() {
-	    return Collections.emptyList();
-	}
-
-	@Override
 	public List<? extends Object> getDescription() {
 	    return this.description;
 	}
@@ -400,22 +390,11 @@ public class BasicBlockBuilder {
 	private final List<? extends Object> description;
 	private final List<Register> input;
 
-	private final BasicBlockBuilder then;
-	private final BasicBlockBuilder otherwise;
-
-	public JumpIf(final Register state, final PrimitiveType type, final BasicBlockBuilder then,
-		final BasicBlockBuilder otherwise, final Register left, final CompareType compareType,
-		final Register right) {
+	public JumpIf(final Register state, final PrimitiveType type, final Register left,
+		final CompareType compareType, final Register right) {
 	    this.description = Arrays.asList("jump_if", type, compareType);
 	    this.input = Arrays.asList(state, left, right);
-	    this.then = then;
-	    this.otherwise = otherwise;
 
-	}
-
-	@Override
-	public List<? extends BasicBlockBuilder> getTargets() {
-	    return Arrays.asList(this.then, this.otherwise);
 	}
 
 	@Override
@@ -429,9 +408,16 @@ public class BasicBlockBuilder {
 	}
     }
 
+    private void referenceTo(final BasicBlockBuilder target) {
+	this.jumpsOut.add(target);
+	target.jumpsIn.add(this);
+    }
+
     public void jumpIf(final PrimitiveType type, final BasicBlockBuilder then, final BasicBlockBuilder otherwise,
 	    final CompareType compareType, final Register left, final Register right) {
-	terminate(new JumpIf(this.environment, type, then, otherwise, left, compareType, right));
+	referenceTo(then);
+	referenceTo(otherwise);
+	terminate(new JumpIf(this.environment, type, left, compareType, right));
     }
 
     public void jumpTable(final Register value, final int defaultOffset, final Map<Integer, Integer> table) {
@@ -441,17 +427,10 @@ public class BasicBlockBuilder {
     class Jump implements Terminator {
 	private final List<? extends Object> description;
 	private final List<Register> input;
-	private final BasicBlockBuilder target;
 
-	public Jump(final Register state, final BasicBlockBuilder target) {
+	public Jump(final Register state) {
 	    this.description = Arrays.asList("jump");
 	    this.input = Arrays.asList(state);
-	    this.target = target;
-	}
-
-	@Override
-	public List<? extends BasicBlockBuilder> getTargets() {
-	    return Arrays.asList(this.target);
 	}
 
 	@Override
@@ -467,7 +446,8 @@ public class BasicBlockBuilder {
     }
 
     public void jump(final BasicBlockBuilder target) {
-	terminate(new Jump(this.environment, target));
+	referenceTo(target);
+	terminate(new Jump(this.environment));
     }
 
     class ReturnError implements Terminator {
@@ -478,11 +458,6 @@ public class BasicBlockBuilder {
 	public ReturnError(final Register state, final Register exception) {
 	    this.description = Arrays.asList("return_error");
 	    this.input = Arrays.asList(state, exception);
-	}
-
-	@Override
-	public List<? extends BasicBlockBuilder> getTargets() {
-	    return Collections.emptyList();
 	}
 
 	@Override
@@ -506,9 +481,6 @@ public class BasicBlockBuilder {
 	}
 	this.terminator = terminator;
 	this.environment = null;
-	for (final BasicBlockBuilder target : terminator.getTargets()) {
-	    target.sources.add(this);
-	}
     }
 
     public boolean isTerminated() {
@@ -519,25 +491,35 @@ public class BasicBlockBuilder {
 	removeDirectJumps(new HashSet<>());
     }
 
+    private <T> T onlyElement(final Iterable<T> iterable) {
+	final Iterator<T> iterator = iterable.iterator();
+	if (!iterator.hasNext()) {
+	    throw new IllegalStateException();
+	}
+	final T t = iterator.next();
+	if (iterator.hasNext()) {
+	    throw new IllegalStateException();
+	}
+	return t;
+    }
+
     private void removeDirectJumps(final HashSet<BasicBlockBuilder> visited) {
 	if (visited.add(this)) {
 	    while (true) {
-		if (this.terminator.getTargets().size() == 1) {
-		    final BasicBlockBuilder target = this.terminator.getTargets().get(0);
-		    if (target.sources.size() == 1) {
-			if (!target.sources.contains(this)) {
+		if (this.jumpsOut.size() == 1) {
+		    final BasicBlockBuilder target = onlyElement(this.jumpsOut);
+		    if (target.jumpsIn.size() == 1) {
+			if (!target.jumpsIn.contains(this)) {
 			    throw new IllegalStateException();
 			}
-			if (this.terminator.getInput().size() != 1) {
-			    throw new IllegalStateException();
-			}
-			target.inputEnvironment.target = this.terminator.getInput().get(0);
+			target.inputEnvironment.target = onlyElement(this.terminator.getInput());
 			this.terminator = target.terminator;
-			for (final BasicBlockBuilder newTarget : this.terminator.getTargets()) {
-			    if (!newTarget.sources.remove(target)) {
+			this.jumpsOut = target.jumpsOut;
+			for (final BasicBlockBuilder newTarget : this.jumpsOut) {
+			    if (!newTarget.jumpsIn.remove(target)) {
 				throw new IllegalStateException();
 			    }
-			    if (!newTarget.sources.add(this)) {
+			    if (!newTarget.jumpsIn.add(this)) {
 				throw new IllegalStateException();
 			    }
 			}
@@ -546,7 +528,7 @@ public class BasicBlockBuilder {
 		}
 		break;
 	    }
-	    for (final BasicBlockBuilder target : this.terminator.getTargets()) {
+	    for (final BasicBlockBuilder target : this.jumpsOut) {
 		target.removeDirectJumps(visited);
 	    }
 	}
@@ -601,7 +583,7 @@ public class BasicBlockBuilder {
 	    out.print(block.terminator.getDescription());
 	    out.print(" ");
 	    out.print(inputRegisters);
-	    for (final BasicBlockBuilder opcode : block.terminator.getTargets()) {
+	    for (final BasicBlockBuilder opcode : block.jumpsOut) {
 		out.print(" ");
 		Integer blockId = printed.get(opcode);
 		if (blockId == null) {
@@ -614,7 +596,7 @@ public class BasicBlockBuilder {
 	    out.println("\"];");
 	}
 	for (final BasicBlockBuilder bbb : printed.keySet()) {
-	    for (final BasicBlockBuilder opcode : bbb.terminator.getTargets()) {
+	    for (final BasicBlockBuilder opcode : bbb.jumpsOut) {
 		out.println(
 			" \"block" + printed.get(bbb) + "\":end -> " + "\"block" + printed.get(opcode) + "\":start;");
 	    }
