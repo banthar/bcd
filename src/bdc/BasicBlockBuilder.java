@@ -505,7 +505,6 @@ public class BasicBlockBuilder {
     }
 
     public void dump(final PrintStream out, final String name) {
-	final int n = 0;
 	final Set<BasicBlockBuilder> printed = new HashSet<>();
 	final Deque<BasicBlockBuilder> toPrint = new ArrayDeque<>();
 	toPrint.add(this);
