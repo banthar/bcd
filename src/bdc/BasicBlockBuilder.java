@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -64,6 +63,8 @@ public class BasicBlockBuilder {
 
     interface InstructionPrinter<T> {
 	List<T> print(Operation operation);
+
+	T blockInput();
     }
 
     interface Register {
@@ -133,7 +134,7 @@ public class BasicBlockBuilder {
 	    if (this.target != null) {
 		return this.target.dump(printer);
 	    } else {
-		return null;
+		return printer.blockInput();
 	    }
 	}
     }
@@ -341,9 +342,19 @@ public class BasicBlockBuilder {
 	private final List<? extends Object> description;
 	private final List<Register> input;
 
+	public ReturnValue(final Register state) {
+	    this.description = Arrays.asList("return_void");
+	    this.input = Arrays.asList(state);
+	}
+
 	public ReturnValue(final Register state, final PrimitiveType type, final Register ref) {
 	    this.description = Arrays.asList("return_value", type);
 	    this.input = Arrays.asList(state, ref);
+	}
+
+	public ReturnValue(final Register state, final Register exception) {
+	    this.description = Arrays.asList("return_error");
+	    this.input = Arrays.asList(state, exception);
 	}
 
 	@Override
@@ -362,29 +373,8 @@ public class BasicBlockBuilder {
 	terminate(new ReturnValue(this.environment, type, ref));
     }
 
-    class ReturnVoid implements Terminator {
-
-	private final List<? extends Object> description;
-	private final List<Register> input;
-
-	public ReturnVoid(final Register state) {
-	    this.description = Arrays.asList("return_void");
-	    this.input = Arrays.asList(state);
-	}
-
-	@Override
-	public List<? extends Object> getDescription() {
-	    return this.description;
-	}
-
-	@Override
-	public List<Register> getInput() {
-	    return this.input;
-	}
-    }
-
     public void returnVoid() {
-	terminate(new ReturnVoid(this.environment));
+	terminate(new ReturnValue(this.environment));
     }
 
     class JumpIf implements Terminator {
@@ -451,29 +441,8 @@ public class BasicBlockBuilder {
 	terminate(new Jump(this.environment));
     }
 
-    class ReturnError implements Terminator {
-
-	private final List<? extends Object> description;
-	private final List<Register> input;
-
-	public ReturnError(final Register state, final Register exception) {
-	    this.description = Arrays.asList("return_error");
-	    this.input = Arrays.asList(state, exception);
-	}
-
-	@Override
-	public List<? extends Object> getDescription() {
-	    return this.description;
-	}
-
-	@Override
-	public List<Register> getInput() {
-	    return this.input;
-	}
-    }
-
     public void returnError(final Register exception) {
-	terminate(new ReturnError(this.environment, exception));
+	terminate(new ReturnValue(this.environment, exception));
     }
 
     private void terminate(final Terminator terminator) {
@@ -509,7 +478,7 @@ public class BasicBlockBuilder {
 	    while (true) {
 		if (this.jumpsOut.size() == 1) {
 		    final BasicBlockBuilder target = onlyElement(this.jumpsOut);
-		    if (target.jumpsIn.size() == 1) {
+		    if (target.jumpsIn.size() == 1 && target != this) {
 			if (!target.jumpsIn.contains(this)) {
 			    throw new IllegalStateException();
 			}
@@ -535,73 +504,102 @@ public class BasicBlockBuilder {
 	}
     }
 
-    public void dump(final PrintStream out) {
-	int n = 0;
-	final HashMap<BasicBlockBuilder, Integer> printed = new HashMap<>();
+    public void dump(final PrintStream out, final String name) {
+	final int n = 0;
+	final Set<BasicBlockBuilder> printed = new HashSet<>();
 	final Deque<BasicBlockBuilder> toPrint = new ArrayDeque<>();
 	toPrint.add(this);
-	printed.put(this, n++);
+	printed.add(this);
 	while (!toPrint.isEmpty()) {
 	    final BasicBlockBuilder block = toPrint.removeFirst();
-	    out.print("  \"block" + printed.get(block) + "\" [");
-	    out.print("shape = \"record\" label = \"<start> #" + printed.get(block));
-	    out.print("|");
 
-	    final InstructionPrinter<Integer> instructionPrinter = new InstructionPrinter<Integer>() {
-		private final IdentityHashMap<Operation, List<Integer>> map = new IdentityHashMap<>();
-		private int n = 0;
+	    out.print("    \"block" + block.hashCode() + "\" [");
+	    out.print("shape = \"record\" label = \"");
+	    out.print("<start> block #" + block.hashCode());
+	    out.println("|{<0> 0}\"];");
+
+	    final InstructionPrinter<String> instructionPrinter = new InstructionPrinter<String>() {
+		private final IdentityHashMap<Operation, List<String>> map = new IdentityHashMap<>();
 
 		@Override
-		public List<Integer> print(final Operation operation) {
-		    final List<Integer> registers = this.map.get(operation);
+		public String blockInput() {
+		    return "\"block" + block.hashCode() + "\":0";
+		}
+
+		@Override
+		public List<String> print(final Operation operation) {
+		    final List<String> registers = this.map.get(operation);
 		    if (registers != null) {
 			return registers;
 		    } else {
-			final List<Integer> inputRegisters = new ArrayList<>();
+			final List<String> inputRegisters = new ArrayList<>();
+			final String operationId = "operation" + operation.hashCode();
 			for (int i = 0; i < operation.getInputSize(); i++) {
 			    inputRegisters.add(operation.getInput(i).dump(this));
 			}
-			final List<Integer> outputRegisters = new ArrayList<>();
+			final List<String> outputRegisters = new ArrayList<>();
 			for (int i = 0; i < operation.getOutputSize(); i++) {
-			    outputRegisters.add(this.n++);
+			    outputRegisters.add("\"" + operationId + "\":out" + String.valueOf(i));
 			}
-			out.print(outputRegisters);
-			out.print(" = ");
-			out.print(operation.description);
-			out.print(" ");
-			out.print(inputRegisters);
+			out.print("    \"" + operationId + "\" [");
+			out.print("shape = \"record\" label = \"");
+			out.print("{in");
+			for (int i = 0; i < inputRegisters.size(); i++) {
+			    out.format("|<in%d> #%d", i, i);
+			}
+			out.print("}|");
+			out.print(operation.description.toString().replace('|', '_').replace('"', ' ').replace('}', '_')
+				.replace('{', '_').replace('$', ' '));
 			out.print("|");
+			out.print("{out");
+			for (int i = 0; i < outputRegisters.size(); i++) {
+			    out.format("|<out%d> #%d", i, i);
+			}
+			out.println("}\"];");
+
+			for (int i = 0; i < inputRegisters.size(); i++) {
+			    out.println("    " + inputRegisters.get(i) + " -> \"" + operationId + "\":in" + i + ";");
+			}
+
 			this.map.put(operation, outputRegisters);
 			return outputRegisters;
 		    }
 		}
 	    };
-	    final List<Integer> inputRegisters = new ArrayList<>();
+
+	    final List<String> inputRegisters = new ArrayList<>();
 	    for (final Register in : block.terminator.getInput()) {
 		inputRegisters.add(in.dump(instructionPrinter));
 	    }
-	    out.print("<end> ");
-	    out.print(block.terminator.getDescription());
-	    out.print(" ");
-	    out.print(inputRegisters);
-	    for (final BasicBlockBuilder opcode : block.jumpsOut) {
-		out.print(" ");
-		Integer blockId = printed.get(opcode);
-		if (blockId == null) {
-		    blockId = n++;
-		    toPrint.add(opcode);
-		}
-		printed.put(opcode, blockId);
-		out.print(blockId);
+
+	    final String terminatorId = "terminator" + block.terminator.hashCode();
+	    out.print("    \"" + terminatorId + "\" [");
+	    out.print("shape = \"record\" label = \"");
+	    out.print("{in");
+	    for (int i = 0; i < inputRegisters.size(); i++) {
+		out.format("|<%d> #%d", i, i);
 	    }
+	    out.print("}|<end> ");
+	    out.print(block.terminator.getDescription().toString().replace('|', '_').replace('"', ' ').replace('}', '_')
+		    .replace('{', '_').replace('$', ' '));
 	    out.println("\"];");
-	}
-	for (final BasicBlockBuilder bbb : printed.keySet()) {
-	    for (final BasicBlockBuilder opcode : bbb.jumpsOut) {
-		out.println(
-			" \"block" + printed.get(bbb) + "\":end -> " + "\"block" + printed.get(opcode) + "\":start;");
+
+	    for (int i = 0; i < inputRegisters.size(); i++) {
+		out.println("    " + inputRegisters.get(i) + " -> \"" + terminatorId + "\":" + i + ";");
 	    }
 
+	    for (final BasicBlockBuilder target : block.jumpsOut) {
+		if (!printed.contains(target)) {
+		    printed.add(target);
+		    toPrint.add(target);
+		}
+	    }
+	}
+	for (final BasicBlockBuilder source : printed) {
+	    for (final BasicBlockBuilder target : source.jumpsOut) {
+		out.println("    \"terminator" + source.terminator.hashCode() + "\":end -> \"block" + target.hashCode()
+			+ "\":start;");
+	    }
 	}
     }
 }

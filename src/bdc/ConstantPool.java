@@ -47,23 +47,48 @@ public class ConstantPool {
 	}
 	case String: {
 	    final int stringIndex = dataInput.readUnsignedShort();
-	    return (ValueConstant) visitor -> visitor.stringConstant(getUTF8(stringIndex));
+	    return new ValueConstant() {
+		@Override
+		public Register visit(final BasicBlockBuilder visitor) {
+		    return visitor.stringConstant(getUTF8(stringIndex));
+		}
+	    };
 	}
 	case Integer: {
 	    final int value = dataInput.readInt();
-	    return (ValueConstant) visitor -> visitor.integerConstant(value);
+	    return new ValueConstant() {
+		@Override
+		public Register visit(final BasicBlockBuilder visitor) {
+		    return visitor.integerConstant(value);
+		}
+	    };
 	}
 	case Float: {
 	    final float value = dataInput.readFloat();
-	    return (ValueConstant) visitor -> visitor.floatConstant(value);
+	    return new ValueConstant() {
+		@Override
+		public Register visit(final BasicBlockBuilder visitor) {
+		    return visitor.floatConstant(value);
+		}
+	    };
 	}
 	case Long: {
 	    final long value = dataInput.readLong();
-	    return (LongValueConstant) visitor -> visitor.longConstant(value);
+	    return new LongValueConstant() {
+		@Override
+		public Register visit(final BasicBlockBuilder visitor) {
+		    return visitor.longConstant(value);
+		}
+	    };
 	}
 	case Double: {
 	    final double value = dataInput.readDouble();
-	    return (LongValueConstant) visitor -> visitor.doubleConstant(value);
+	    return new LongValueConstant() {
+		@Override
+		public Register visit(final BasicBlockBuilder visitor) {
+		    return visitor.doubleConstant(value);
+		}
+	    };
 	}
 	case NameAndType: {
 	    final int nameIndex = dataInput.readUnsignedShort();
@@ -204,7 +229,7 @@ public class ConstantPool {
 	}
     }
 
-    public class ClassReference {
+    public class ClassReference implements ValueConstant {
 	int nameIndex;
 
 	public ClassReference(final int nameIndex) {
@@ -223,6 +248,12 @@ public class ConstantPool {
 	public ReferenceType getType() {
 	    return ReferenceType.fromClassName(getUTF8(this.nameIndex));
 	}
+
+	@Override
+	public Register visit(final BasicBlockBuilder visitor) {
+	    return visitor.stringConstant("TODO class " + getType());
+	}
+
     }
 
     public interface ValueConstant {

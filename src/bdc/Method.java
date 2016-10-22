@@ -42,7 +42,7 @@ public class Method {
 	final BasicBlockBuilder block = InstructionParser.parseCode(dataInput, constantPool, this.selfType.getType(),
 		MethodType.fromDescriptor(this.descriptor));
 	block.removeDirectJumps();
-	block.dump(System.out);
+	block.dump(System.out, getName());
 	if (dataInput.read() != -1) {
 	    throw new ClassFormatException("Extra bytes at end of method code");
 	}

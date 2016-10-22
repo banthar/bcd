@@ -4,6 +4,12 @@ import java.util.Random;
 
 public interface Test {
 
+    static int parallel(final int a, final int b) {
+	final int c = a * a * a * a;
+	final int d = b + b + b + b;
+	return c + d;
+    }
+
     static int gcd(int a, int b) {
 	while (a != b) {
 	    int max;
@@ -34,4 +40,10 @@ public interface Test {
 	System.out.println(n);
     }
 
+    static int infinite(final int a) {
+	int b = a;
+	while (true) {
+	    b = a + b;
+	}
+    }
 }

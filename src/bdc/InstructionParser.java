@@ -73,13 +73,16 @@ public class InstructionParser {
 	    final ConstantPool constantPool, final ReferenceType selfType, final MethodType methodType)
 	    throws ClassFormatException {
 	final Map<Integer, BasicBlockBuilder> blocks = new HashMap<>();
-	final Function<Integer, BasicBlockBuilder> getBlock = id -> {
-	    BasicBlockBuilder block = blocks.get(id);
-	    if (block == null) {
-		block = methodBuilder.createBasicBlock();
-		blocks.put(id, block);
+	final Function<Integer, BasicBlockBuilder> getBlock = new Function<Integer, BasicBlockBuilder>() {
+	    @Override
+	    public BasicBlockBuilder apply(Integer id) {
+		BasicBlockBuilder block = blocks.get(id);
+		if (block == null) {
+		    block = methodBuilder.createBasicBlock();
+		    blocks.put(id, block);
+		}
+		return block;
 	    }
-	    return block;
 	};
 	while (in.position() < in.limit()) {
 	    final int opcodeOffset = in.position();
@@ -599,7 +602,8 @@ public class InstructionParser {
 		for (int i = opcodeOffset; i < in.position(); i++) {
 		    buf += String.format("%02x ", in.get(i));
 		}
-		throw new ClassFormatException("Invalid bytecode: " + buf + ": " + e.getMessage(), e);
+		throw new ClassFormatException(
+			"Invalid bytecode at offset: " + opcodeOffset + ": " + buf + ": " + e.getMessage(), e);
 	    }
 	    if (!block.isTerminated()) {
 		block.jump(getBlock.apply(in.position()));

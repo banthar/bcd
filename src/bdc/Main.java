@@ -8,17 +8,22 @@ public class Main {
     public static void main(final String[] args) throws Exception {
 	final File bin = new File("bin");
 	final URLClassParser bytecodeLoader = new URLClassParser(new URL[] { bin.toURI().toURL() });
-	final Class c = bytecodeLoader.loadClass(args[0]);
-	for (final Method m : c.getMethods()) {
-	    if (args[1].equals(m.getName())) {
-		System.out.println("digraph \"" + m.getName() + "\" {");
-		System.out
-			.println("  graph [rankdir = \"LR\", splines = polyline, sep = \"+30,30\", overlap = false];");
+	System.out.println("digraph G {");
+	System.out.println("  graph [rankdir = \"LR\", splines = polyline];");
+	for (final String arg : args) {
+	    final Class c = bytecodeLoader.loadClass(arg);
+	    System.out
+		    .println("  subgraph cluster_" + c.getName().toString().replace('/', '_').replace('$', '_') + " {");
+	    for (final Method m : c.getMethods()) {
+		System.out.println("  subgraph cluster_"
+			+ m.getName().replace('<', '_').replace('>', '_').replace('$', '_') + " {");
+		System.out.println("    label=\"" + m.getName() + "\";");
 		m.parse(c.getConstantPool());
-		System.out.println("}");
-		break;
+		System.out.println("  }");
 	    }
+	    System.out.println("}");
 	}
+	System.out.println("}");
     }
 
 }
