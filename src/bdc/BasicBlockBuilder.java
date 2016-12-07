@@ -62,72 +62,96 @@ public class BasicBlockBuilder {
     }
 
     interface InstructionPrinter<T> {
-	List<T> print(Operation operation);
+	List<T> print(Node operation);
 
 	T blockInput();
     }
 
-    interface Register {
+    interface Port {
 	<T> T dump(InstructionPrinter<T> printer);
+
+	Node getNode();
     }
 
-    class Operation {
+    interface InputNode {
+	default Port getInput(final int n) {
+	    return getInput().get(n);
+	}
+
+	default int getInputSize() {
+	    return getInput().size();
+	}
+
+	List<Port> getInput();
+
+    }
+
+    interface OutputNode {
+	default int getOutputSize() {
+	    return getOutput().size();
+	}
+
+	default Port getOutput(final int n) {
+	    return getOutput().get(n);
+	}
+
+	List<Port> getOutput();
+
+    }
+
+    class Node implements InputNode, OutputNode {
 
 	private List<Object> description;
-	private final List<Register> output;
-	private final List<Register> input;
+	private final List<Port> output;
+	private final List<Port> input;
 
-	public Operation(final List<Object> description, final int outputs, final List<Register> input) {
+	public Node(final List<Object> description, final int outputs, final List<Port> input) {
 	    this.description = description;
 	    this.input = input;
 	    this.output = new ArrayList<>();
 	    for (int i = 0; i < outputs; i++) {
 		final int n = i;
-		this.output.add(new Register() {
+		this.output.add(new Port() {
 		    @Override
 		    public <T> T dump(final InstructionPrinter<T> printer) {
-			return printer.print(Operation.this).get(n);
+			return printer.print(Node.this).get(n);
+		    }
+
+		    @Override
+		    public Node getNode() {
+			return Node.this;
 		    }
 		});
 	    }
 	}
 
-	public Operation(final List<Object> description, final int outputs, final Register... input) {
+	public Node(final List<Object> description, final int outputs, final Port... input) {
 	    this(description, outputs, Arrays.asList(input));
 	}
 
-	public Register getInput(final int n) {
-	    return this.input.get(n);
+	@Override
+	public List<Port> getInput() {
+	    return this.input;
 	}
 
-	public Register getOutput(final int n) {
-	    return this.output.get(n);
+	@Override
+	public List<Port> getOutput() {
+	    return this.output;
 	}
-
-	public int getOutputSize() {
-	    return this.output.size();
-	}
-
-	public int getInputSize() {
-	    return this.input.size();
-	}
-
     }
 
-    class Constant extends Operation {
+    class Constant extends Node {
 	public Constant(final Type type, final Object value) {
 	    super(Arrays.asList("const", type, value), 1, Collections.emptyList());
 	}
     }
 
-    interface Terminator {
-	List<Register> getInput();
-
+    interface Terminator extends InputNode {
 	List<? extends Object> getDescription();
     }
 
-    class RegisterReference implements Register {
-	Register target;
+    class RegisterReference implements Port {
+	Port target;
 
 	@Override
 	public <T> T dump(final InstructionPrinter<T> printer) {
@@ -137,157 +161,162 @@ public class BasicBlockBuilder {
 		return printer.blockInput();
 	    }
 	}
+
+	@Override
+	public Node getNode() {
+	    if (this.target != null) {
+		return this.target.getNode();
+	    } else {
+		return null;
+	    }
+	}
     }
 
     private final RegisterReference inputEnvironment = new RegisterReference();
-    private Register environment = this.inputEnvironment;
+    private Port environment = this.inputEnvironment;
     private Terminator terminator = null;
     private Set<BasicBlockBuilder> jumpsOut = new HashSet<>();
     private final Set<BasicBlockBuilder> jumpsIn = new HashSet<>();
 
-    public void putLocal(final int id, final Register value) {
-	final Operation operation = new Operation(Arrays.asList("store_local", id), 1, this.environment, value);
+    public void putLocal(final int id, final Port value) {
+	final Node operation = new Node(Arrays.asList("store_local", id), 1, this.environment, value);
 	this.environment = operation.getOutput(0);
     }
 
-    public Register getLocal(final int id) {
-	final Operation operation = new Operation(Arrays.asList("load_local", id), 1, this.environment);
+    public Port getLocal(final int id) {
+	final Node operation = new Node(Arrays.asList("load_local", id), 1, this.environment);
 	return operation.getOutput(0);
     }
 
-    public Register pop() {
-	final Operation operation = new Operation(Arrays.asList("pop"), 2, this.environment);
+    public Port pop() {
+	final Node operation = new Node(Arrays.asList("pop"), 2, this.environment);
 	this.environment = operation.getOutput(0);
 	return operation.getOutput(1);
 
     }
 
-    public void push(final Register value) {
-	this.environment = new Operation(Arrays.asList("push"), 1, this.environment, value).getOutput(0);
+    public void push(final Port value) {
+	this.environment = new Node(Arrays.asList("push"), 1, this.environment, value).getOutput(0);
     }
 
-    public Register nullConstant() {
+    public Port nullConstant() {
 	return new Constant(PrimitiveType.Reference, null).getOutput(0);
     }
 
-    public Register integerConstant(final int value) {
+    public Port integerConstant(final int value) {
 	return new Constant(PrimitiveType.Integer, value).getOutput(0);
     }
 
-    public Register longConstant(final long value) {
+    public Port longConstant(final long value) {
 	return new Constant(PrimitiveType.Long, value).getOutput(0);
     }
 
-    public Register floatConstant(final float value) {
+    public Port floatConstant(final float value) {
 	return new Constant(PrimitiveType.Float, value).getOutput(0);
     }
 
-    public Register doubleConstant(final double value) {
+    public Port doubleConstant(final double value) {
 	return new Constant(PrimitiveType.Double, value).getOutput(0);
     }
 
-    public Register stringConstant(final String value) {
+    public Port stringConstant(final String value) {
 	return new Constant(Type.string(), value).getOutput(0);
     }
 
-    public Register binaryOperation(final PrimitiveType type, final BinaryOperationType op, final Register left,
-	    final Register right) {
-	return new Operation(Arrays.asList("binary_operation", type, op), 1, left, right).getOutput(0);
+    public Port binaryOperation(final PrimitiveType type, final BinaryOperationType op, final Port left,
+	    final Port right) {
+	return new Node(Arrays.asList("binary_operation", type, op), 1, left, right).getOutput(0);
     }
 
-    public Register negate(final PrimitiveType type, final Register value) {
-	return new Operation(Arrays.asList("negate", type), 1, value).getOutput(0);
+    public Port negate(final PrimitiveType type, final Port value) {
+	return new Node(Arrays.asList("negate", type), 1, value).getOutput(0);
     }
 
-    public Register shift(final PrimitiveType type, final ShiftType shiftType, final Register left,
-	    final Register right) {
-	return new Operation(Arrays.asList("shift", type, shiftType), 1, left, right).getOutput(0);
+    public Port shift(final PrimitiveType type, final ShiftType shiftType, final Port left, final Port right) {
+	return new Node(Arrays.asList("shift", type, shiftType), 1, left, right).getOutput(0);
     }
 
-    public Register bitwiseOperation(final PrimitiveType type, final BitwiseOperationType operation,
-	    final Register left, final Register right) {
-	return new Operation(Arrays.asList("bitwise_operation", type, operation), 1, left, right).getOutput(0);
+    public Port bitwiseOperation(final PrimitiveType type, final BitwiseOperationType operation, final Port left,
+	    final Port right) {
+	return new Node(Arrays.asList("bitwise_operation", type, operation), 1, left, right).getOutput(0);
     }
 
-    public Register convert(final PrimitiveType from, final PrimitiveType to, final Register value) {
-	return new Operation(Arrays.asList("convert", from, to), 1, value).getOutput(0);
+    public Port convert(final PrimitiveType from, final PrimitiveType to, final Port value) {
+	return new Node(Arrays.asList("convert", from, to), 1, value).getOutput(0);
     }
 
-    public Register compare(final PrimitiveType type, final Register left, final Register right) {
-	return new Operation(Arrays.asList("compare", type), 1, left, right).getOutput(0);
+    public Port compare(final PrimitiveType type, final Port left, final Port right) {
+	return new Node(Arrays.asList("compare", type), 1, left, right).getOutput(0);
     }
 
-    public Register loadElement(final PrimitiveType elementType, final Register arrayref, final Register index) {
-	final Operation operation = new Operation(Arrays.asList("load_element", elementType), 1, this.environment,
-		arrayref, index);
+    public Port loadElement(final PrimitiveType elementType, final Port arrayref, final Port index) {
+	final Node operation = new Node(Arrays.asList("load_element", elementType), 1, this.environment, arrayref,
+		index);
 	return operation.getOutput(0);
     }
 
-    public void storeElement(final Register arrayref, final Register index) {
-	final Operation operation = new Operation(Arrays.asList("store_element"), 1, this.environment, arrayref, index);
+    public void storeElement(final Port arrayref, final Port index) {
+	final Node operation = new Node(Arrays.asList("store_element"), 1, this.environment, arrayref, index);
 	this.environment = operation.getOutput(0);
     }
 
-    public Register checkedCast(final ClassReference type, final Register value) {
-	final Operation operation = new Operation(Arrays.asList("checked_cast", type), 1, value);
+    public Port checkedCast(final ClassReference type, final Port value) {
+	final Node operation = new Node(Arrays.asList("checked_cast", type), 1, value);
 	return operation.getOutput(0);
     }
 
-    public Register instanceOf(final ClassReference type, final Register value) {
-	final Operation operation = new Operation(Arrays.asList("instance_of", type), 1, value);
+    public Port instanceOf(final ClassReference type, final Port value) {
+	final Node operation = new Node(Arrays.asList("instance_of", type), 1, value);
 	return operation.getOutput(0);
     }
 
-    public void monitorEnter(final Register monitor) {
-	final Operation operation = new Operation(Arrays.asList("monitor_enter"), 1, monitor);
+    public void monitorEnter(final Port monitor) {
+	final Node operation = new Node(Arrays.asList("monitor_enter"), 1, monitor);
 	this.environment = operation.getInput(0);
     }
 
-    public void monitorExit(final Register monitor) {
-	final Operation operation = new Operation(Arrays.asList("monitor_exit"), 1, monitor);
+    public void monitorExit(final Port monitor) {
+	final Node operation = new Node(Arrays.asList("monitor_exit"), 1, monitor);
 	this.environment = operation.getInput(0);
     }
 
-    public Register loadStaticField(final FieldReference fieldReference) {
-	final Operation operation = new Operation(Arrays.asList("load_static_field", fieldReference), 1,
-		this.environment);
+    public Port loadStaticField(final FieldReference fieldReference) {
+	final Node operation = new Node(Arrays.asList("load_static_field", fieldReference), 1, this.environment);
 	return operation.getOutput(0);
     }
 
-    public void storeStaticField(final FieldReference fieldReference, final Register value) {
-	final Operation operation = new Operation(Arrays.asList("store_static_field", fieldReference), 1,
-		this.environment, value);
+    public void storeStaticField(final FieldReference fieldReference, final Port value) {
+	final Node operation = new Node(Arrays.asList("store_static_field", fieldReference), 1, this.environment,
+		value);
 	this.environment = operation.getOutput(0);
     }
 
-    public Register loadField(final FieldReference fieldReference, final Register target) {
-	final Operation operation = new Operation(Arrays.asList("load_static_field", fieldReference), 1,
-		this.environment, target);
+    public Port loadField(final FieldReference fieldReference, final Port target) {
+	final Node operation = new Node(Arrays.asList("load_static_field", fieldReference), 1, this.environment,
+		target);
 	return operation.getOutput(0);
     }
 
-    public void storeField(final FieldReference fieldReference, final Register target, final Register value) {
-	final Operation operation = new Operation(Arrays.asList("store_field", fieldReference), 1, this.environment,
-		target, value);
+    public void storeField(final FieldReference fieldReference, final Port target, final Port value) {
+	final Node operation = new Node(Arrays.asList("store_field", fieldReference), 1, this.environment, target,
+		value);
 	this.environment = operation.getOutput(0);
     }
 
-    public List<Register> invokeVirtual(final MethodReference methodReference, final Register target,
-	    final List<Register> args) {
+    public List<Port> invokeVirtual(final MethodReference methodReference, final Port target, final List<Port> args) {
 	return invoke("invoke_virtual", methodReference, target, args);
     }
 
-    private List<Register> invoke(final String type, final MethodReference methodReference, final Register target,
-	    final List<Register> args) {
+    private List<Port> invoke(final String type, final MethodReference methodReference, final Port target,
+	    final List<Port> args) {
 	final MethodType methodType = methodReference.getType();
-	final List<Register> input = new ArrayList<>();
+	final List<Port> input = new ArrayList<>();
 	input.add(this.environment);
 	if (target != null) {
 	    input.add(target);
 	}
 	input.addAll(args);
-	final Operation operation = new Operation(Arrays.asList(type, methodReference), methodType.isVoid() ? 1 : 2,
-		input);
+	final Node operation = new Node(Arrays.asList(type, methodReference), methodType.isVoid() ? 1 : 2, input);
 	this.environment = operation.getOutput(0);
 	if (methodType.isVoid()) {
 	    return Collections.emptyList();
@@ -296,63 +325,60 @@ public class BasicBlockBuilder {
 	}
     }
 
-    public List<Register> invokeSpecial(final MethodReference methodReference, final Register target,
-	    final List<Register> args) {
+    public List<Port> invokeSpecial(final MethodReference methodReference, final Port target, final List<Port> args) {
 	return invoke("invoke_special", methodReference, target, args);
     }
 
-    public List<Register> invokeStatic(final MethodReference methodReference, final List<Register> args) {
+    public List<Port> invokeStatic(final MethodReference methodReference, final List<Port> args) {
 	return invoke("invoke_static", methodReference, null, args);
 
     }
 
-    public List<Register> invokeInterface(final MethodReference methodReference, final Register target,
-	    final List<Register> args) {
+    public List<Port> invokeInterface(final MethodReference methodReference, final Port target, final List<Port> args) {
 	return invoke("invoke_interface", methodReference, target, args);
 
     }
 
-    public Register newInstance(final ClassReference classReference) {
-	final Operation operation = new Operation(Arrays.asList("new_instance", classReference), 2, this.environment);
+    public Port newInstance(final ClassReference classReference) {
+	final Node operation = new Node(Arrays.asList("new_instance", classReference), 2, this.environment);
 	this.environment = operation.getOutput(0);
 	return operation.getOutput(1);
     }
 
-    public Register newPrimitiveArray(final PrimitiveType type, final Register size) {
-	final Operation operation = new Operation(Arrays.asList("new_primitive_array", type), 2, this.environment,
-		size);
+    public Port newPrimitiveArray(final PrimitiveType type, final Port size) {
+	final Node operation = new Node(Arrays.asList("new_primitive_array", type), 2, this.environment, size);
 	this.environment = operation.getOutput(0);
 	return operation.getOutput(1);
     }
 
-    public Register newArray(final ClassReference type, final Register size) {
-	final Operation operation = new Operation(Arrays.asList("new_array", type), 2, this.environment, size);
+    public Port newArray(final ClassReference type, final Port size) {
+	final Node operation = new Node(Arrays.asList("new_array", type), 2, this.environment, size);
 	this.environment = operation.getOutput(0);
 	return operation.getOutput(1);
 
     }
 
-    public Register arrayLength(final Register array) {
-	final Operation operation = new Operation(Arrays.asList("array_length"), 1, this.environment, array);
+    public Port arrayLength(final Port array) {
+	final Node operation = new Node(Arrays.asList("array_length"), 1, this.environment, array);
 	return operation.getOutput(0);
     }
 
     class ReturnValue implements Terminator {
 
 	private final List<? extends Object> description;
-	private final List<Register> input;
+	private final List<Port> input;
 
-	public ReturnValue(final Register state) {
+	public ReturnValue(final Port state) {
 	    this.description = Arrays.asList("return_void");
 	    this.input = Arrays.asList(state);
 	}
 
-	public ReturnValue(final Register state, final PrimitiveType type, final Register ref) {
+	public ReturnValue(final Port state, final PrimitiveType type, final Port ref) {
 	    this.description = Arrays.asList("return_value", type);
 	    this.input = Arrays.asList(state, ref);
 	}
 
-	public ReturnValue(final Register state, final Register exception) {
+	public ReturnValue(final Port state, final Port exception) {
 	    this.description = Arrays.asList("return_error");
 	    this.input = Arrays.asList(state, exception);
 	}
@@ -363,13 +389,13 @@ public class BasicBlockBuilder {
 	}
 
 	@Override
-	public List<Register> getInput() {
+	public List<Port> getInput() {
 	    return this.input;
 	}
 
     }
 
-    public void returnValue(final PrimitiveType type, final Register ref) {
+    public void returnValue(final PrimitiveType type, final Port ref) {
 	terminate(new ReturnValue(this.environment, type, ref));
     }
 
@@ -379,10 +405,10 @@ public class BasicBlockBuilder {
 
     class JumpIf implements Terminator {
 	private final List<? extends Object> description;
-	private final List<Register> input;
+	private final List<Port> input;
 
-	public JumpIf(final Register state, final PrimitiveType type, final Register left,
-		final CompareType compareType, final Register right) {
+	public JumpIf(final Port state, final PrimitiveType type, final Port left, final CompareType compareType,
+		final Port right) {
 	    this.description = Arrays.asList("jump_if", type, compareType);
 	    this.input = Arrays.asList(state, left, right);
 
@@ -394,7 +420,7 @@ public class BasicBlockBuilder {
 	}
 
 	@Override
-	public List<Register> getInput() {
+	public List<Port> getInput() {
 	    return this.input;
 	}
     }
@@ -405,21 +431,21 @@ public class BasicBlockBuilder {
     }
 
     public void jumpIf(final PrimitiveType type, final BasicBlockBuilder then, final BasicBlockBuilder otherwise,
-	    final CompareType compareType, final Register left, final Register right) {
+	    final CompareType compareType, final Port left, final Port right) {
 	referenceTo(then);
 	referenceTo(otherwise);
 	terminate(new JumpIf(this.environment, type, left, compareType, right));
     }
 
-    public void jumpTable(final Register value, final int defaultOffset, final Map<Integer, Integer> table) {
+    public void jumpTable(final Port value, final int defaultOffset, final Map<Integer, Integer> table) {
 	throw new IllegalStateException();
     }
 
     class Jump implements Terminator {
 	private final List<? extends Object> description;
-	private final List<Register> input;
+	private final List<Port> input;
 
-	public Jump(final Register state) {
+	public Jump(final Port state) {
 	    this.description = Arrays.asList("jump");
 	    this.input = Arrays.asList(state);
 	}
@@ -430,7 +456,7 @@ public class BasicBlockBuilder {
 	}
 
 	@Override
-	public List<Register> getInput() {
+	public List<Port> getInput() {
 	    return this.input;
 	}
 
@@ -441,7 +467,7 @@ public class BasicBlockBuilder {
 	terminate(new Jump(this.environment));
     }
 
-    public void returnError(final Register exception) {
+    public void returnError(final Port exception) {
 	terminate(new ReturnValue(this.environment, exception));
     }
 
@@ -504,6 +530,29 @@ public class BasicBlockBuilder {
 	}
     }
 
+    public void removeStack() {
+	final Set<BasicBlockBuilder> visited = new HashSet<>();
+	removeStack(visited);
+    }
+
+    private void removeStack(final Set<BasicBlockBuilder> visited) {
+	if (visited.add(this)) {
+	    removeStack(this.terminator);
+	    for (final BasicBlockBuilder block : this.jumpsOut) {
+		block.removeStack(visited);
+	    }
+	}
+    }
+
+    private void removeStack(final InputNode node) {
+	for (final Port r : node.getInput()) {
+	    final Node op = r.getNode();
+	    if (op != null) {
+		removeStack(op);
+	    }
+	}
+    }
+
     public void dump(final PrintStream out, final String name) {
 	final Set<BasicBlockBuilder> printed = new HashSet<>();
 	final Deque<BasicBlockBuilder> toPrint = new ArrayDeque<>();
@@ -518,7 +567,7 @@ public class BasicBlockBuilder {
 	    out.println("|{<0> 0}\"];");
 
 	    final InstructionPrinter<String> instructionPrinter = new InstructionPrinter<String>() {
-		private final IdentityHashMap<Operation, List<String>> map = new IdentityHashMap<>();
+		private final IdentityHashMap<Node, List<String>> map = new IdentityHashMap<>();
 
 		@Override
 		public String blockInput() {
@@ -526,7 +575,7 @@ public class BasicBlockBuilder {
 		}
 
 		@Override
-		public List<String> print(final Operation operation) {
+		public List<String> print(final Node operation) {
 		    final List<String> registers = this.map.get(operation);
 		    if (registers != null) {
 			return registers;
@@ -567,7 +616,7 @@ public class BasicBlockBuilder {
 	    };
 
 	    final List<String> inputRegisters = new ArrayList<>();
-	    for (final Register in : block.terminator.getInput()) {
+	    for (final Port in : block.terminator.getInput()) {
 		inputRegisters.add(in.dump(instructionPrinter));
 	    }
 

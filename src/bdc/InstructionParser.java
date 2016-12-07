@@ -12,7 +12,7 @@ import java.util.function.Function;
 import bdc.BasicBlockBuilder.BinaryOperationType;
 import bdc.BasicBlockBuilder.BitwiseOperationType;
 import bdc.BasicBlockBuilder.CompareType;
-import bdc.BasicBlockBuilder.Register;
+import bdc.BasicBlockBuilder.Port;
 import bdc.BasicBlockBuilder.ShiftType;
 import bdc.ConstantPool.ClassReference;
 import bdc.ConstantPool.LongValueConstant;
@@ -229,23 +229,23 @@ public class InstructionParser {
 		    }
 		    break;
 		case 0x59: {
-		    final Register value = block.pop();
+		    final Port value = block.pop();
 		    block.push(value);
 		    block.push(value);
 		    break;
 		}
 		case 0x5a: {
-		    final Register value0 = block.pop();
-		    final Register value1 = block.pop();
+		    final Port value0 = block.pop();
+		    final Port value1 = block.pop();
 		    block.push(value0);
 		    block.push(value1);
 		    block.push(value0);
 		    break;
 		}
 		case 0x5b: {
-		    final Register value0 = block.pop();
-		    final Register value1 = block.pop();
-		    final Register value2 = block.pop();
+		    final Port value0 = block.pop();
+		    final Port value1 = block.pop();
+		    final Port value2 = block.pop();
 		    block.push(value0);
 		    block.push(value2);
 		    block.push(value1);
@@ -253,8 +253,8 @@ public class InstructionParser {
 		    break;
 		}
 		case 0x5c: {
-		    final Register value0 = block.pop();
-		    final Register value1 = block.pop();
+		    final Port value0 = block.pop();
+		    final Port value1 = block.pop();
 		    block.push(value1);
 		    block.push(value0);
 		    block.push(value1);
@@ -262,9 +262,9 @@ public class InstructionParser {
 		    break;
 		}
 		case 0x5d: {
-		    final Register value0 = block.pop();
-		    final Register value1 = block.pop();
-		    final Register value2 = block.pop();
+		    final Port value0 = block.pop();
+		    final Port value1 = block.pop();
+		    final Port value2 = block.pop();
 		    block.push(value1);
 		    block.push(value0);
 		    block.push(value2);
@@ -273,10 +273,10 @@ public class InstructionParser {
 		    break;
 		}
 		case 0x5e: {
-		    final Register value0 = block.pop();
-		    final Register value1 = block.pop();
-		    final Register value2 = block.pop();
-		    final Register value3 = block.pop();
+		    final Port value0 = block.pop();
+		    final Port value1 = block.pop();
+		    final Port value2 = block.pop();
+		    final Port value3 = block.pop();
 		    block.push(value1);
 		    block.push(value0);
 		    block.push(value3);
@@ -286,8 +286,8 @@ public class InstructionParser {
 		    break;
 		}
 		case 0x5f: {
-		    final Register value0 = block.pop();
-		    final Register value1 = block.pop();
+		    final Port value0 = block.pop();
+		    final Port value1 = block.pop();
 		    block.push(value0);
 		    block.push(value1);
 		    break;
@@ -486,27 +486,27 @@ public class InstructionParser {
 		    break;
 		case 0xb6: {
 		    final MethodReference methodReference = constantPool.getMethodReference(getUnsignedShort(in));
-		    final List<Register> returned = block.invokeVirtual(methodReference, block.pop(),
+		    final List<Port> returned = block.invokeVirtual(methodReference, block.pop(),
 			    readMethodArguments(methodReference.getType(), block));
-		    for (final Register value : returned) {
+		    for (final Port value : returned) {
 			block.push(value);
 		    }
 		    break;
 		}
 		case 0xb7: {
 		    final MethodReference methodReference = constantPool.getMethodReference(getUnsignedShort(in));
-		    final List<Register> returned = block.invokeSpecial(methodReference, block.pop(),
+		    final List<Port> returned = block.invokeSpecial(methodReference, block.pop(),
 			    readMethodArguments(methodReference.getType(), block));
-		    for (final Register value : returned) {
+		    for (final Port value : returned) {
 			block.push(value);
 		    }
 		    break;
 		}
 		case 0xb8: {
 		    final MethodReference methodReference = constantPool.getMethodReference(getUnsignedShort(in));
-		    final List<Register> returned = block.invokeStatic(methodReference,
+		    final List<Port> returned = block.invokeStatic(methodReference,
 			    readMethodArguments(methodReference.getType(), block));
-		    for (final Register value : returned) {
+		    for (final Port value : returned) {
 			block.push(value);
 		    }
 		    break;
@@ -522,9 +522,9 @@ public class InstructionParser {
 		    if (getUnsignedByte(in) != 0) {
 			throw new ClassFormatException("expected 0 byte after invokeinterface");
 		    }
-		    final List<Register> returned = block.invokeInterface(methodReference, block.pop(),
+		    final List<Port> returned = block.invokeInterface(methodReference, block.pop(),
 			    readMethodArguments(methodReference.getType(), block));
-		    for (final Register value : returned) {
+		    for (final Port value : returned) {
 			block.push(value);
 		    }
 		    break;
@@ -612,15 +612,15 @@ public class InstructionParser {
 	return getBlock.apply(0);
     }
 
-    private static List<Register> readMethodArguments(final MethodType methodType, final BasicBlockBuilder stack) {
-	final List<Register> arguments = new ArrayList<>();
+    private static List<Port> readMethodArguments(final MethodType methodType, final BasicBlockBuilder stack) {
+	final List<Port> arguments = new ArrayList<>();
 	for (final Type arg : methodType.getArgumentTypes()) {
 	    arguments.add(stack.pop());
 	}
 	return arguments;
     }
 
-    private static Register loadConstant(final BasicBlockBuilder visitor, final ConstantPool constantPool,
+    private static Port loadConstant(final BasicBlockBuilder visitor, final ConstantPool constantPool,
 	    final int index) throws ClassFormatException {
 	final Object value = constantPool.get(index);
 	if (value instanceof ValueConstant) {
@@ -630,7 +630,7 @@ public class InstructionParser {
 	}
     }
 
-    private static Register loadLongConstant(final BasicBlockBuilder visitor, final ConstantPool constantPool,
+    private static Port loadLongConstant(final BasicBlockBuilder visitor, final ConstantPool constantPool,
 	    final int index) throws ClassFormatException {
 	final Object value = constantPool.get(index);
 	if (value instanceof LongValueConstant) {

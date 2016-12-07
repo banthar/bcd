@@ -3,6 +3,7 @@ package bdc;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.List;
 
@@ -18,6 +19,7 @@ public class Method {
     private final byte[] code;
     private final List<ClassReference> exceptions;
     private final String signature;
+    private BasicBlockBuilder block;
 
     public Method(final ClassReference selfType, final int accessFlags, final String name, final String descriptor,
 	    final byte[] code, final List<ClassReference> exceptions, final String signature) {
@@ -41,11 +43,16 @@ public class Method {
 	final DataInputStream dataInput = new DataInputStream(new ByteArrayInputStream(this.code));
 	final BasicBlockBuilder block = InstructionParser.parseCode(dataInput, constantPool, this.selfType.getType(),
 		MethodType.fromDescriptor(this.descriptor));
-	block.removeDirectJumps();
-	block.dump(System.out, getName());
 	if (dataInput.read() != -1) {
 	    throw new ClassFormatException("Extra bytes at end of method code");
 	}
+	block.removeDirectJumps();
+	// block.removeStack();
+	this.block = block;
+    }
+
+    public void dump(final PrintStream out) {
+	this.block.dump(out, getName());
     }
 
     @Override
