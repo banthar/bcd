@@ -64,7 +64,7 @@ public class BasicBlockBuilder {
 
     class Constant extends Node {
 	public Constant(final Type type, final Object value) {
-	    super(Arrays.asList("const", type, value), NodeType.CONSTANT, 1, Collections.emptyList());
+	    super(Arrays.asList("const", type, value), NodeType.CONSTANT, false, 1, null, Collections.emptyList());
 	}
     }
 
@@ -74,8 +74,8 @@ public class BasicBlockBuilder {
 	String getId();
     }
 
-    private final Node inputNode = new Node(Arrays.asList(this), NodeType.INIT, 1);
-    private OutputPort environment = this.inputNode.getOutput(0);
+    private final Node inputNode = new Node(Arrays.asList(this), NodeType.INIT, true, 0, null);
+    private OutputPort environment = this.inputNode.getOutputEnvironment();
     private Terminator terminator = null;
     private Set<BasicBlockBuilder> jumpsOut = new HashSet<>();
     private final Set<BasicBlockBuilder> jumpsIn = new HashSet<>();
@@ -85,134 +85,142 @@ public class BasicBlockBuilder {
     private final int id = nextId++;
 
     public void putLocal(final int id, final OutputPort value) {
-	final Node operation = new Node(Arrays.asList("store_local", id), NodeType.STORE_LOCAL, 1, this.environment,
-		value);
-	this.environment = operation.getOutput(0);
+	final Node operation = new Node(Arrays.asList("store_local", id), NodeType.STORE_LOCAL, true, 0,
+		this.environment, value);
+	this.environment = operation.getOutputEnvironment();
     }
 
     public OutputPort getLocal(final int id) {
-	final Node operation = new Node(Arrays.asList("load_local", id), NodeType.LOAD_LOCAL, 1, this.environment);
-	return operation.getOutput(0);
+	final Node operation = new Node(Arrays.asList("load_local", id), NodeType.LOAD_LOCAL, false, 1,
+		this.environment);
+	return operation.getExtraOutput(0);
     }
 
     public OutputPort pop() {
-	final Node operation = new Node(Arrays.asList("pop"), NodeType.POP, 2, this.environment);
-	this.environment = operation.getOutput(0);
-	return operation.getOutput(1);
+	final Node operation = new Node(Arrays.asList("pop"), NodeType.POP, true, 1, this.environment);
+	this.environment = operation.getOutputEnvironment();
+	return operation.getExtraOutput(0);
 
     }
 
     public void push(final OutputPort value) {
-	this.environment = new Node(Arrays.asList("push"), NodeType.PUSH, 1, this.environment, value).getOutput(0);
+	this.environment = new Node(Arrays.asList("push"), NodeType.PUSH, true, 0, this.environment, value)
+		.getOutputEnvironment();
     }
 
     public OutputPort nullConstant() {
-	return new Constant(PrimitiveType.Reference, null).getOutput(0);
+	return new Constant(PrimitiveType.Reference, null).getExtraOutput(0);
     }
 
     public OutputPort integerConstant(final int value) {
-	return new Constant(PrimitiveType.Integer, value).getOutput(0);
+	return new Constant(PrimitiveType.Integer, value).getExtraOutput(0);
     }
 
     public OutputPort longConstant(final long value) {
-	return new Constant(PrimitiveType.Long, value).getOutput(0);
+	return new Constant(PrimitiveType.Long, value).getExtraOutput(0);
     }
 
     public OutputPort floatConstant(final float value) {
-	return new Constant(PrimitiveType.Float, value).getOutput(0);
+	return new Constant(PrimitiveType.Float, value).getExtraOutput(0);
     }
 
     public OutputPort doubleConstant(final double value) {
-	return new Constant(PrimitiveType.Double, value).getOutput(0);
+	return new Constant(PrimitiveType.Double, value).getExtraOutput(0);
     }
 
     public OutputPort stringConstant(final String value) {
-	return new Constant(Type.string(), value).getOutput(0);
+	return new Constant(Type.string(), value).getExtraOutput(0);
     }
 
     public OutputPort binaryOperation(final PrimitiveType type, final BinaryOperationType op, final OutputPort left,
 	    final OutputPort right) {
-	return new Node(Arrays.asList("binary_operation", type, op), NodeType.BINARY_OPERATION, 1, left, right)
-		.getOutput(0);
+	return new Node(Arrays.asList("binary_operation", type, op), NodeType.BINARY_OPERATION, false, 1, null, left,
+		right).getExtraOutput(0);
     }
 
     public OutputPort negate(final PrimitiveType type, final OutputPort value) {
-	return new Node(Arrays.asList("negate", type), NodeType.NEGATE, 1, value).getOutput(0);
+	return new Node(Arrays.asList("negate", type), NodeType.NEGATE, false, 1, null, value).getExtraOutput(0);
     }
 
     public OutputPort shift(final PrimitiveType type, final ShiftType shiftType, final OutputPort left,
 	    final OutputPort right) {
-	return new Node(Arrays.asList("shift", type, shiftType), NodeType.SHIFT, 1, left, right).getOutput(0);
+	return new Node(Arrays.asList("shift", type, shiftType), NodeType.SHIFT, false, 1, null, left, right)
+		.getExtraOutput(0);
     }
 
     public OutputPort bitwiseOperation(final PrimitiveType type, final BitwiseOperationType operation,
 	    final OutputPort left, final OutputPort right) {
-	return new Node(Arrays.asList("bitwise_operation", type, operation), NodeType.BITWISE_OPERATION, 1, left, right)
-		.getOutput(0);
+	return new Node(Arrays.asList("bitwise_operation", type, operation), NodeType.BITWISE_OPERATION, false, 1, null,
+		left, right).getExtraOutput(0);
     }
 
     public OutputPort convert(final PrimitiveType from, final PrimitiveType to, final OutputPort value) {
-	return new Node(Arrays.asList("convert", from, to), NodeType.CONVERT, 1, value).getOutput(0);
+	return new Node(Arrays.asList("convert", from, to), NodeType.CONVERT, false, 1, null, value).getExtraOutput(0);
     }
 
     public OutputPort compare(final PrimitiveType type, final OutputPort left, final OutputPort right) {
-	return new Node(Arrays.asList("compare", type), NodeType.COMPARE, 1, left, right).getOutput(0);
+	return new Node(Arrays.asList("compare", type), NodeType.COMPARE, false, 1, null, left, right)
+		.getExtraOutput(0);
     }
 
     public OutputPort loadElement(final PrimitiveType elementType, final OutputPort arrayref, final OutputPort index) {
-	final Node operation = new Node(Arrays.asList("load_element", elementType), NodeType.LOAD_ELEMENT, 1,
+	final Node operation = new Node(Arrays.asList("load_element", elementType), NodeType.LOAD_ELEMENT, false, 1,
 		this.environment, arrayref, index);
-	return operation.getOutput(0);
+	return operation.getExtraOutput(0);
     }
 
     public void storeElement(final OutputPort arrayref, final OutputPort index) {
-	final Node operation = new Node(Arrays.asList("store_element"), NodeType.STORE_ELEMENT, 1, this.environment,
-		arrayref, index);
-	this.environment = operation.getOutput(0);
+	final Node operation = new Node(Arrays.asList("store_element"), NodeType.STORE_ELEMENT, true, 1,
+		this.environment, arrayref, index);
+	this.environment = operation.getOutputEnvironment();
     }
 
     public OutputPort checkedCast(final ClassReference type, final OutputPort value) {
-	final Node operation = new Node(Arrays.asList("checked_cast", type), NodeType.CHECKED_CAST, 1, value);
-	return operation.getOutput(0);
+	final Node operation = new Node(Arrays.asList("checked_cast", type), NodeType.CHECKED_CAST, false, 1, null,
+		value);
+	return operation.getExtraOutput(0);
     }
 
     public OutputPort instanceOf(final ClassReference type, final OutputPort value) {
-	final Node operation = new Node(Arrays.asList("instance_of", type), NodeType.INSTANCE_OF, 1, value);
-	return operation.getOutput(0);
+	final Node operation = new Node(Arrays.asList("instance_of", type), NodeType.INSTANCE_OF, false, 1, null,
+		value);
+	return operation.getExtraOutput(0);
     }
 
     public void monitorEnter(final OutputPort monitor) {
-	final Node operation = new Node(Arrays.asList("monitor_enter"), NodeType.MONITOR_ENTER, 1, monitor);
-	this.environment = operation.getOutput(0);
+	final Node operation = new Node(Arrays.asList("monitor_enter"), NodeType.MONITOR_ENTER, true, 1,
+		this.environment, monitor);
+	this.environment = operation.getOutputEnvironment();
     }
 
     public void monitorExit(final OutputPort monitor) {
-	final Node operation = new Node(Arrays.asList("monitor_exit"), NodeType.MONITOR_EXIT, 1, monitor);
-	this.environment = operation.getOutput(0);
+	final Node operation = new Node(Arrays.asList("monitor_exit"), NodeType.MONITOR_EXIT, true, 1, this.environment,
+		monitor);
+	this.environment = operation.getOutputEnvironment();
     }
 
     public OutputPort loadStaticField(final FieldReference fieldReference) {
 	final Node operation = new Node(Arrays.asList("load_static_field", fieldReference), NodeType.LOAD_STATIC_FIELD,
-		1, this.environment);
-	return operation.getOutput(0);
+		false, 1, this.environment);
+	return operation.getExtraOutput(0);
     }
 
     public void storeStaticField(final FieldReference fieldReference, final OutputPort value) {
 	final Node operation = new Node(Arrays.asList("store_static_field", fieldReference),
-		NodeType.STORE_STATIC_FIELD, 1, this.environment, value);
-	this.environment = operation.getOutput(0);
+		NodeType.STORE_STATIC_FIELD, true, 1, this.environment, value);
+	this.environment = operation.getOutputEnvironment();
     }
 
     public OutputPort loadField(final FieldReference fieldReference, final OutputPort target) {
-	final Node operation = new Node(Arrays.asList("load_field", fieldReference), NodeType.LOAD_FIELD, 1,
+	final Node operation = new Node(Arrays.asList("load_field", fieldReference), NodeType.LOAD_FIELD, false, 1,
 		this.environment, target);
-	return operation.getOutput(0);
+	return operation.getExtraOutput(0);
     }
 
     public void storeField(final FieldReference fieldReference, final OutputPort target, final OutputPort value) {
-	final Node operation = new Node(Arrays.asList("store_field", fieldReference), NodeType.STORE_FIELD, 1,
+	final Node operation = new Node(Arrays.asList("store_field", fieldReference), NodeType.STORE_FIELD, true, 1,
 		this.environment, target, value);
-	this.environment = operation.getOutput(0);
+	this.environment = operation.getOutputEnvironment();
     }
 
     public List<OutputPort> invokeVirtual(final MethodReference methodReference, final OutputPort target,
@@ -224,18 +232,17 @@ public class BasicBlockBuilder {
 	    final List<OutputPort> args) {
 	final MethodType methodType = methodReference.getType();
 	final List<OutputPort> input = new ArrayList<>();
-	input.add(this.environment);
 	if (target != null) {
 	    input.add(target);
 	}
 	input.addAll(args);
-	final Node operation = new Node(Arrays.asList(type, methodReference), NodeType.INVOKE,
-		methodType.isVoid() ? 1 : 2, input);
-	this.environment = operation.getOutput(0);
+	final Node operation = new Node(Arrays.asList(type, methodReference), NodeType.INVOKE, true,
+		methodType.isVoid() ? 1 : 2, this.environment, input);
+	this.environment = operation.getOutputEnvironment();
 	if (methodType.isVoid()) {
 	    return Collections.emptyList();
 	} else {
-	    return Arrays.asList(operation.getOutput(1));
+	    return Arrays.asList(operation.getExtraOutput(0));
 	}
     }
 
@@ -256,31 +263,31 @@ public class BasicBlockBuilder {
     }
 
     public OutputPort newInstance(final ClassReference classReference) {
-	final Node operation = new Node(Arrays.asList("new_instance", classReference), NodeType.NEW_INSTANCE, 2,
+	final Node operation = new Node(Arrays.asList("new_instance", classReference), NodeType.NEW_INSTANCE, true, 2,
 		this.environment);
-	this.environment = operation.getOutput(0);
-	return operation.getOutput(1);
+	this.environment = operation.getOutputEnvironment();
+	return operation.getExtraOutput(0);
     }
 
     public OutputPort newPrimitiveArray(final PrimitiveType type, final OutputPort size) {
-	final Node operation = new Node(Arrays.asList("new_primitive_array", type), NodeType.NEW_PRIMITIVE_ARRAY, 2,
-		this.environment, size);
-	this.environment = operation.getOutput(0);
-	return operation.getOutput(1);
+	final Node operation = new Node(Arrays.asList("new_primitive_array", type), NodeType.NEW_PRIMITIVE_ARRAY, true,
+		2, this.environment, size);
+	this.environment = operation.getOutputEnvironment();
+	return operation.getExtraOutput(0);
     }
 
     public OutputPort newArray(final ClassReference type, final OutputPort size) {
-	final Node operation = new Node(Arrays.asList("new_array", type), NodeType.NEW_ARRAY, 2, this.environment,
+	final Node operation = new Node(Arrays.asList("new_array", type), NodeType.NEW_ARRAY, true, 2, this.environment,
 		size);
-	this.environment = operation.getOutput(0);
-	return operation.getOutput(1);
+	this.environment = operation.getOutputEnvironment();
+	return operation.getExtraOutput(0);
 
     }
 
     public OutputPort arrayLength(final OutputPort array) {
-	final Node operation = new Node(Arrays.asList("array_length"), NodeType.ARRAY_LENGTH, 1, this.environment,
-		array);
-	return operation.getOutput(0);
+	final Node operation = new Node(Arrays.asList("array_length"), NodeType.ARRAY_LENGTH, false, 1,
+		this.environment, array);
+	return operation.getExtraOutput(0);
     }
 
     class ReturnValue extends TerminatorNode {
@@ -412,17 +419,41 @@ public class BasicBlockBuilder {
 
     public void removeDirectStackWrites() {
 	for (final BasicBlockBuilder block : getAllTargetBlocks()) {
-	    for (final Node source : block.inputNode.getAllTargetNodes()) {
-		if (source.getType() == NodeType.PUSH) {
-		    final Set<? extends InputPort> targets = Iterables.getOnlyElement(source.getOutput()).getTargets();
-		    if (targets.size() == 1) {
-			final InputPort target = Iterables.getOnlyElement(targets);
-			if (target.getNode().getType() == NodeType.POP) {
-			    Node.merge(source, target.getNode());
-			}
-		    }
-		}
+	    final Node source = block.inputNode;
+	    removePush(source, null);
+	}
+    }
+
+    private void removePush(final Node source, final Chain<Node> stack) {
+	if (source.getType() == NodeType.TERMINATOR && stack != null) {
+	    System.out.println("pass stack to next block: " + Chain.toList(stack));
+	}
+
+	if (source.getOutputEnvironment() == null) {
+	    return;
+	}
+	final Set<? extends InputPort> targets = source.getOutputEnvironment().getTargets();
+	final Chain<Node> newStack;
+	if (source.getType() == NodeType.PUSH) {
+	    newStack = Chain.append(source, stack);
+	} else if (source.getType() == NodeType.POP) {
+	    if (stack != null) {
+		final Node push = stack.head;
+		final Node pop = source;
+		pop.getOutputEnvironment().replaceWith(pop.getInputEnvironment().unlink());
+		pop.getExtraOutput(0).replaceWith(push.getExtraInput(0).unlink());
+		push.getOutputEnvironment().replaceWith(push.getInputEnvironment().unlink());
+		newStack = stack.tail;
+	    } else {
+		newStack = stack;
+		System.out.println("fetch stack from previous block");
 	    }
+	} else {
+	    newStack = stack;
+	}
+
+	for (final InputPort port : targets) {
+	    removePush(port.getNode(), newStack);
 	}
     }
 
@@ -431,7 +462,7 @@ public class BasicBlockBuilder {
 	    out.print("    " + quote(block.inputNode.getNodeId()) + " [");
 	    out.print("shape = \"record\" label = \"" + block.getBlockId() + " init");
 	    out.print("|{out");
-	    for (final OutputPort port : block.inputNode.getOutput()) {
+	    for (final OutputPort port : block.inputNode.getAllOutputPorts()) {
 		out.print("|<" + port.getId() + "> #" + port.getId());
 	    }
 	    out.println("}\"];");
@@ -441,16 +472,16 @@ public class BasicBlockBuilder {
 		out.print("    \"" + node.getNodeId() + "\" [");
 		out.print("shape = \"record\" label = \"");
 		out.print("{in");
-		for (int i = 0; i < node.getInput().size(); i++) {
-		    out.format("|<%s> #%d", node.getInput().get(i).getId(), i);
+		for (int i = 0; i < node.getAllInputPorts().size(); i++) {
+		    out.format("|<%s> #%d", node.getAllInputPorts().get(i).getId(), i);
 		}
 		out.print("}|");
 		out.print(node.description.toString().replace('|', '_').replace('"', ' ').replace('}', '_')
 			.replace('{', '_').replace('$', ' '));
 		out.print("|");
 		out.print("{out");
-		for (int i = 0; i < node.getOutput().size(); i++) {
-		    out.format("|<%s> #%d", node.getOutput().get(i).getId(), i);
+		for (int i = 0; i < node.getAllOutputPorts().size(); i++) {
+		    out.format("|<%s> #%d", node.getAllOutputPorts().get(i).getId(), i);
 		}
 		out.println("}\"];");
 	    }
@@ -458,7 +489,7 @@ public class BasicBlockBuilder {
 	    final Set<Node> nodes = new HashSet<>(block.inputNode.getAllTargetNodes());
 	    nodes.add(block.inputNode);
 	    for (final Node node : nodes) {
-		for (final OutputPort sourcePort : node.getOutput()) {
+		for (final OutputPort sourcePort : node.getAllOutputPorts()) {
 		    for (final InputPort targetPort : sourcePort.getTargets()) {
 			out.println(sourcePort.getNode().getNodeId() + ":" + sourcePort.getId() + " -> "
 				+ targetPort.getNode().getNodeId() + ":" + targetPort.getId());

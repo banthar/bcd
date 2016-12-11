@@ -64,31 +64,45 @@ class Node implements InputNode, OutputNode {
 	ARRAY_LENGTH,
 
 	TERMINATOR,
+
     }
 
     private final NodeType type;
-    private final List<InputPort> input;
     List<Object> description;
+
+    InputPort inputEnvironment;
+    private final List<InputPort> input;
+
+    OutputPort outputEnvironment;
     private final List<OutputPort> output;
 
-    public Node(final List<Object> description, final NodeType type, final int outputs,
-	    final List<? extends OutputPort> input) {
+    public Node(final List<Object> description, final NodeType type, final boolean writesMemory, final int outputs,
+	    final OutputPort inputEnvironment, final List<? extends OutputPort> input) {
 	this.description = description;
 	this.type = type;
+
+	if (inputEnvironment != null) {
+	    this.inputEnvironment = new InputPort(this, inputEnvironment);
+	}
 	this.input = new ArrayList<>();
+	for (int i = 0; i < input.size(); i++) {
+	    final InputPort port = new InputPort(this, input.get(i));
+	    this.input.add(port);
+	}
+
+	if (writesMemory) {
+	    this.outputEnvironment = new OutputPort(this);
+	}
 	this.output = new ArrayList<>();
 	for (int i = 0; i < outputs; i++) {
-	    final OutputPort port = new OutputPort(this, i);
+	    final OutputPort port = new OutputPort(this);
 	    this.output.add(port);
-	}
-	for (int i = 0; i < input.size(); i++) {
-	    final InputPort port = new InputPort(this, i, input.get(i));
-	    this.input.add(port);
 	}
     }
 
-    public Node(final List<Object> description, final NodeType type, final int outputs, final OutputPort... input) {
-	this(description, type, outputs, Arrays.asList(input));
+    public Node(final List<Object> description, final NodeType type, final boolean writesMemory, final int outputs,
+	    final OutputPort inputEnvironment, final OutputPort... input) {
+	this(description, type, writesMemory, outputs, inputEnvironment, Arrays.asList(input));
     }
 
     public NodeType getType() {
@@ -96,13 +110,23 @@ class Node implements InputNode, OutputNode {
     }
 
     @Override
-    public List<? extends InputPort> getInput() {
-	return this.input;
+    public List<? extends InputPort> getAllInputPorts() {
+	final ArrayList<InputPort> list = new ArrayList<>();
+	if (this.inputEnvironment != null) {
+	    list.add(this.inputEnvironment);
+	}
+	list.addAll(this.input);
+	return list;
     }
 
     @Override
-    public List<? extends OutputPort> getOutput() {
-	return this.output;
+    public List<? extends OutputPort> getAllOutputPorts() {
+	final ArrayList<OutputPort> list = new ArrayList<>();
+	if (this.outputEnvironment != null) {
+	    list.add(this.outputEnvironment);
+	}
+	list.addAll(this.output);
+	return list;
     }
 
     public String getNodeId() {
@@ -117,7 +141,7 @@ class Node implements InputNode, OutputNode {
     }
 
     private void addAllTargetNodes(final Set<Node> nodes) {
-	for (final OutputPort port : getOutput()) {
+	for (final OutputPort port : getAllOutputPorts()) {
 	    for (final InputPort targetPort : port.getTargets()) {
 		final Node targetNode = targetPort.getNode();
 		if (nodes.add(targetNode)) {
@@ -135,7 +159,7 @@ class Node implements InputNode, OutputNode {
     }
 
     private void addAllSourceNodes(final Set<Node> nodes) {
-	for (final InputPort port : getInput()) {
+	for (final InputPort port : getAllInputPorts()) {
 	    final Node sourceNode = port.getSource().getNode();
 	    if (nodes.add(sourceNode)) {
 		sourceNode.addAllTargetNodes(nodes);
@@ -144,20 +168,38 @@ class Node implements InputNode, OutputNode {
     }
 
     public static void merge(final InputNode inputNode, final OutputNode outputNode) {
-	final List<? extends InputPort> input = inputNode.getInput();
-	final List<? extends OutputPort> output = outputNode.getOutput();
+	final List<? extends InputPort> input = inputNode.getAllInputPorts();
+	final List<? extends OutputPort> output = outputNode.getAllOutputPorts();
 	if (input.size() != output.size()) {
 	    throw new IllegalStateException();
 	}
-	for (int i = 0; i < input.size(); i++) {
-	    merge(input.get(i), output.get(i));
-	}
+	merge(inputNode.getInputEnvironment(), outputNode.getOutputEnvironment());
     }
 
     public static void merge(final InputPort input, final OutputPort output) {
 	output.replaceWith(input.getSource());
 	Iterables.assertEmpty(output.getTargets());
 	input.unlink();
+    }
+
+    @Override
+    public InputPort getInputEnvironment() {
+	return this.inputEnvironment;
+    }
+
+    @Override
+    public InputPort getExtraInput(final int index) {
+	return this.input.get(index);
+    }
+
+    @Override
+    public OutputPort getOutputEnvironment() {
+	return this.outputEnvironment;
+    }
+
+    @Override
+    public OutputPort getExtraOutput(final int index) {
+	return this.output.get(index);
     }
 
     @Override

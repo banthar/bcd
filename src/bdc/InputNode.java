@@ -3,14 +3,10 @@ package bdc;
 import java.util.List;
 
 interface InputNode {
-    default InputPort getInput(final int n) {
-	return getInput().get(n);
-    }
+    List<? extends InputPort> getAllInputPorts();
 
-    default int getInputSize() {
-	return getInput().size();
-    }
+    InputPort getInputEnvironment();
 
-    List<? extends InputPort> getInput();
+    InputPort getExtraInput(final int index);
 
 }

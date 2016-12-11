@@ -1,13 +1,15 @@
 package bdc;
 
 final class InputPort {
+    private static int nextId = 0;
+
     private final Node node;
-    private final int n;
+    private final int id;
     private OutputPort source;
 
-    InputPort(final Node node, final int n, final OutputPort remotePort) {
+    InputPort(final Node node, final OutputPort remotePort) {
 	this.node = node;
-	this.n = n;
+	this.id = nextId++;
 	link(remotePort);
     }
 
@@ -23,11 +25,13 @@ final class InputPort {
 	}
     }
 
-    public void unlink() {
+    public OutputPort unlink() {
 	if (!this.source.targets.remove(this)) {
 	    throw new IllegalStateException();
 	}
+	final OutputPort source = this.source;
 	this.source = null;
+	return source;
     }
 
     public Node getNode() {
@@ -35,7 +39,7 @@ final class InputPort {
     }
 
     public String getId() {
-	return "in" + String.valueOf(this.n);
+	return "in" + String.valueOf(this.id);
     }
 
     public OutputPort getSource() {
