@@ -2,6 +2,11 @@ package bdc.test;
 
 public interface Test {
 
+    static int f(final int a, final int b) {
+	final boolean c = a > b;
+	return c ? a : c ? a : c ? a : c ? a : c ? a : b;
+    }
+
     static int pow(final int a, final int b) {
 	int c = 1;
 	for (int i = 1; i <= b; i++) {

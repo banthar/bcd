@@ -2,7 +2,7 @@ package bdc;
 
 public class PortId {
 
-    private static enum PortType {
+    public static enum PortType {
 	ENV,
 
 	ARG,
@@ -12,9 +12,9 @@ public class PortId {
 	LOCAL,
     }
 
-    private final PortType type;
+    public final PortType type;
 
-    private final int index;
+    public final int index;
 
     private PortId(final PortType type, final int id) {
 	this.type = type;

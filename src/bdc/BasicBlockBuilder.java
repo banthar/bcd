@@ -69,16 +69,9 @@ public class BasicBlockBuilder {
 	}
     }
 
-    interface Terminator extends InputNode {
-	List<? extends Object> getDescription();
-
-	String getId();
-
-    }
-
     final Node inputNode = new Node(Arrays.asList(this), NodeType.INIT, true, 0, null);
     private OutputPort environment = this.inputNode.getOutputEnvironment();
-    Terminator terminator = null;
+    TerminatorNode terminator = null;
     Set<BasicBlockBuilder> jumpsOut = new HashSet<>();
     Set<BasicBlockBuilder> jumpsIn = new HashSet<>();
 
@@ -351,7 +344,7 @@ public class BasicBlockBuilder {
 	terminate(new ReturnValue(this.environment, exception));
     }
 
-    private void terminate(final Terminator terminator) {
+    private void terminate(final TerminatorNode terminator) {
 	if (this.terminator != null || this.environment == null) {
 	    throw new IllegalStateException();
 	}

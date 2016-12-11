@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Set;
 
 import bdc.Node.NodeType;
+import bdc.PortId.PortType;
 
 public class BlockTransformations {
 
@@ -49,6 +50,27 @@ public class BlockTransformations {
 	for (final BasicBlockBuilder block : startBlock.getAllTargetBlocks()) {
 	    final Node source = block.inputNode;
 	    removePush(block, source, null, 0, new HashMap<>());
+	}
+	addMissingBlockPorts(startBlock, new HashSet<>());
+    }
+
+    private static void addMissingBlockPorts(final BasicBlockBuilder startBlock,
+	    final HashSet<BasicBlockBuilder> visited) {
+	if (visited.add(startBlock)) {
+	    for (final BasicBlockBuilder target : startBlock.jumpsOut) {
+		addMissingBlockPorts(target, visited);
+		for (final PortId portId : target.inputNode.getAllOutputPorts().keySet()) {
+		    if (startBlock.terminator.getInput(portId) == null) {
+			if (portId.type == PortType.LOCAL) {
+			    startBlock.terminator.addInput(portId, startBlock.inputNode.provideOutput(portId));
+			}
+			if (portId.type == PortType.STACK) {
+			    System.out.println("missing stack port: " + portId);
+			}
+		    }
+		}
+	    }
+	    visited.remove(startBlock);
 	}
     }
 
@@ -93,10 +115,7 @@ public class BlockTransformations {
 	    final int localId = ((Integer) node.getData()).intValue();
 	    OutputPort storedValue = locals.get(localId);
 	    if (storedValue == null) {
-		storedValue = block.inputNode.getOutput(PortId.local(localId));
-		if (storedValue == null) {
-		    storedValue = block.inputNode.addOutput(PortId.local(localId));
-		}
+		storedValue = block.inputNode.provideOutput(PortId.local(localId));
 	    }
 	    node.getOutput(PortId.arg(0)).replaceWith(storedValue);
 	    node.getInputEnvironment().unlink();

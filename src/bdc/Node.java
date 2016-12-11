@@ -205,6 +205,15 @@ class Node implements InputNode, OutputNode {
 	return newPort;
     }
 
+    public OutputPort provideOutput(final PortId id) {
+	final OutputPort existingOutput = getOutput(id);
+	if (existingOutput == null) {
+	    return addOutput(id);
+	} else {
+	    return existingOutput;
+	}
+    }
+
     @Override
     public String toString() {
 	return getNodeId() + "{" + getType() + "}";
