@@ -4,7 +4,6 @@ import java.io.DataInput;
 import java.io.IOException;
 import java.util.Arrays;
 
-import bdc.BasicBlockBuilder.Port;
 import bdc.Type.FieldType;
 import bdc.Type.MethodType;
 import bdc.Type.ReferenceType;
@@ -49,7 +48,7 @@ public class ConstantPool {
 	    final int stringIndex = dataInput.readUnsignedShort();
 	    return new ValueConstant() {
 		@Override
-		public Port visit(final BasicBlockBuilder visitor) {
+		public OutputPort visit(final BasicBlockBuilder visitor) {
 		    return visitor.stringConstant(getUTF8(stringIndex));
 		}
 	    };
@@ -58,7 +57,7 @@ public class ConstantPool {
 	    final int value = dataInput.readInt();
 	    return new ValueConstant() {
 		@Override
-		public Port visit(final BasicBlockBuilder visitor) {
+		public OutputPort visit(final BasicBlockBuilder visitor) {
 		    return visitor.integerConstant(value);
 		}
 	    };
@@ -67,7 +66,7 @@ public class ConstantPool {
 	    final float value = dataInput.readFloat();
 	    return new ValueConstant() {
 		@Override
-		public Port visit(final BasicBlockBuilder visitor) {
+		public OutputPort visit(final BasicBlockBuilder visitor) {
 		    return visitor.floatConstant(value);
 		}
 	    };
@@ -76,7 +75,7 @@ public class ConstantPool {
 	    final long value = dataInput.readLong();
 	    return new LongValueConstant() {
 		@Override
-		public Port visit(final BasicBlockBuilder visitor) {
+		public OutputPort visit(final BasicBlockBuilder visitor) {
 		    return visitor.longConstant(value);
 		}
 	    };
@@ -85,7 +84,7 @@ public class ConstantPool {
 	    final double value = dataInput.readDouble();
 	    return new LongValueConstant() {
 		@Override
-		public Port visit(final BasicBlockBuilder visitor) {
+		public OutputPort visit(final BasicBlockBuilder visitor) {
 		    return visitor.doubleConstant(value);
 		}
 	    };
@@ -250,17 +249,17 @@ public class ConstantPool {
 	}
 
 	@Override
-	public Port visit(final BasicBlockBuilder visitor) {
+	public OutputPort visit(final BasicBlockBuilder visitor) {
 	    return visitor.stringConstant("TODO class " + getType());
 	}
 
     }
 
     public interface ValueConstant {
-	Port visit(BasicBlockBuilder visitor);
+	OutputPort visit(BasicBlockBuilder visitor);
     }
 
     public interface LongValueConstant {
-	Port visit(BasicBlockBuilder visitor);
+	OutputPort visit(BasicBlockBuilder visitor);
     }
 }
