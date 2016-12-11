@@ -76,25 +76,23 @@ public class BasicBlockBuilder {
 
     }
 
-    private final Node inputNode = new Node(Arrays.asList(this), NodeType.INIT, true, 0, null);
+    final Node inputNode = new Node(Arrays.asList(this), NodeType.INIT, true, 0, null);
     private OutputPort environment = this.inputNode.getOutputEnvironment();
-    private Terminator terminator = null;
-    private Set<BasicBlockBuilder> jumpsOut = new HashSet<>();
-    private final Set<BasicBlockBuilder> jumpsIn = new HashSet<>();
+    Terminator terminator = null;
+    Set<BasicBlockBuilder> jumpsOut = new HashSet<>();
+    Set<BasicBlockBuilder> jumpsIn = new HashSet<>();
 
     private static int nextId = 0;
 
     private final int id = nextId++;
 
     public void putLocal(final int id, final OutputPort value) {
-	final Node operation = new Node(Arrays.asList("store_local", id), NodeType.STORE_LOCAL, true, 0,
-		this.environment, value);
+	final Node operation = new Node(id, NodeType.STORE_LOCAL, true, 0, this.environment, value);
 	this.environment = operation.getOutputEnvironment();
     }
 
     public OutputPort getLocal(final int id) {
-	final Node operation = new Node(Arrays.asList("load_local", id), NodeType.LOAD_LOCAL, false, 1,
-		this.environment);
+	final Node operation = new Node(id, NodeType.LOAD_LOCAL, false, 1, this.environment);
 	return operation.getOutputArg(0);
     }
 
@@ -365,14 +363,6 @@ public class BasicBlockBuilder {
 	return this.terminator != null;
     }
 
-    public void removeDirectJumps() {
-	removeDirectJumps(new HashSet<>());
-    }
-
-    private <T> T onlyElement(final Iterable<T> iterable) {
-	return Iterables.getOnlyElement(iterable);
-    }
-
     public Set<BasicBlockBuilder> getAllTargetBlocks() {
 	final Set<BasicBlockBuilder> visited = new HashSet<>(Arrays.asList(this));
 	getAllTargetBlocks(visited);
@@ -384,93 +374,6 @@ public class BasicBlockBuilder {
 	    if (visited.add(out)) {
 		out.getAllTargetBlocks(visited);
 	    }
-	}
-    }
-
-    private void removeDirectJumps(final HashSet<BasicBlockBuilder> visited) {
-	if (visited.add(this)) {
-	    while (true) {
-		if (this.jumpsOut.size() == 1) {
-		    final BasicBlockBuilder target = onlyElement(this.jumpsOut);
-		    if (target.jumpsIn.size() == 1 && target != this) {
-			if (!target.jumpsIn.contains(this)) {
-			    throw new IllegalStateException();
-			}
-			Node.merge(this.terminator, target.inputNode);
-			this.terminator = target.terminator;
-			this.jumpsOut = target.jumpsOut;
-			for (final BasicBlockBuilder newTarget : this.jumpsOut) {
-			    if (!newTarget.jumpsIn.remove(target)) {
-				throw new IllegalStateException();
-			    }
-			    if (!newTarget.jumpsIn.add(this)) {
-				throw new IllegalStateException();
-			    }
-			}
-			continue;
-		    }
-		}
-		break;
-	    }
-	    for (final BasicBlockBuilder target : this.jumpsOut) {
-		target.removeDirectJumps(visited);
-	    }
-	}
-    }
-
-    private static class NodePair {
-	public final OutputPort env;
-	public final OutputPort value;
-
-	public NodePair(final OutputPort env, final OutputPort value) {
-	    this.env = env;
-	    this.value = value;
-	}
-    }
-
-    public void removeDirectStackWrites() {
-	for (final BasicBlockBuilder block : getAllTargetBlocks()) {
-	    final Node source = block.inputNode;
-	    block.removePush(source, null, 0);
-	}
-    }
-
-    private void removePush(final Node node, final Chain<OutputPort> stack, final int stackArgs) {
-	final Chain<OutputPort> newStack;
-	int newStackArgs = stackArgs;
-
-	if (node.getType() == NodeType.TERMINATOR) {
-	    int i = 0;
-	    Chain<OutputPort> frame = stack;
-	    while (frame != null) {
-		node.addInput(PortId.stack(i++), frame.head);
-		frame = frame.tail;
-	    }
-
-	}
-	if (node.getOutputEnvironment() == null) {
-	    return;
-	}
-	final Set<? extends InputPort> targets = node.getOutputEnvironment().getTargets();
-	if (node.getType() == NodeType.PUSH) {
-	    final OutputPort value = node.getInputArg(PortId.arg(0)).unlink();
-	    node.getOutputEnvironment().replaceWith(node.getInputEnvironment().unlink());
-	    newStack = Chain.append(value, stack);
-	} else if (node.getType() == NodeType.POP) {
-	    node.getOutputEnvironment().replaceWith(node.getInputEnvironment().unlink());
-	    if (stack != null) {
-		node.getOutputArg(0).replaceWith(stack.head);
-		newStack = stack.tail;
-	    } else {
-		node.getOutputArg(0).replaceWith(this.inputNode.addOutput(PortId.stack(newStackArgs++)));
-		newStack = stack;
-	    }
-	} else {
-	    newStack = stack;
-	}
-
-	for (final InputPort port : targets) {
-	    removePush(port.getNode(), newStack, newStackArgs);
 	}
     }
 
@@ -495,8 +398,8 @@ public class BasicBlockBuilder {
 		    out.format("|<%s> %s", entry.getValue().getId(), entry.getKey() + ": " + entry.getValue().getId());
 		}
 		out.print("}|");
-		out.print(node.description.toString().replace('|', '_').replace('"', ' ').replace('}', '_')
-			.replace('{', '_').replace('$', ' '));
+		out.print(Arrays.asList(node.getType(), node.getData()).toString().replace('|', '_').replace('"', ' ')
+			.replace('}', '_').replace('{', '_').replace('$', ' '));
 		out.print("|");
 		out.print("{<out>out");
 		for (final Entry<? extends PortId, ? extends OutputPort> entry : node.getAllOutputPorts().entrySet()) {

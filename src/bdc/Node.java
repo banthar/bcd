@@ -73,15 +73,15 @@ class Node implements InputNode, OutputNode {
     private final int id = nextId++;
 
     private final NodeType type;
-    List<Object> description;
+    Object data;
 
     private final Map<PortId, InputPort> input;
 
     private final Map<PortId, OutputPort> output;
 
-    public Node(final List<Object> description, final NodeType type, final boolean writesMemory, final int outputs,
+    public Node(final Object data, final NodeType type, final boolean writesMemory, final int outputs,
 	    final OutputPort inputEnvironment, final List<? extends OutputPort> input) {
-	this.description = description;
+	this.data = data;
 	this.type = type;
 
 	this.input = new HashMap<>();
@@ -103,9 +103,9 @@ class Node implements InputNode, OutputNode {
 	}
     }
 
-    public Node(final List<Object> description, final NodeType type, final boolean writesMemory, final int outputs,
+    public Node(final Object data, final NodeType type, final boolean writesMemory, final int outputs,
 	    final OutputPort inputEnvironment, final OutputPort... input) {
-	this(description, type, writesMemory, outputs, inputEnvironment, Arrays.asList(input));
+	this(data, type, writesMemory, outputs, inputEnvironment, Arrays.asList(input));
     }
 
     public NodeType getType() {
@@ -174,7 +174,7 @@ class Node implements InputNode, OutputNode {
 	return this.input.get(PortId.environment());
     }
 
-    public InputPort getInputArg(final PortId id) {
+    public InputPort getInput(final PortId id) {
 	return this.input.get(id);
     }
 
@@ -208,5 +208,9 @@ class Node implements InputNode, OutputNode {
     @Override
     public String toString() {
 	return getNodeId() + "{" + getType() + "}";
+    }
+
+    public Object getData() {
+	return this.data;
     }
 }

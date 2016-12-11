@@ -46,8 +46,8 @@ public class Method {
 	if (dataInput.read() != -1) {
 	    throw new ClassFormatException("Extra bytes at end of method code");
 	}
-	block.removeDirectJumps();
-	block.removeDirectStackWrites();
+	BlockTransformations.removeDirectJumps(block);
+	BlockTransformations.removeDirectStackWrites(block);
 	this.block = block;
     }
 
