@@ -47,7 +47,7 @@ public class Method {
 	    throw new ClassFormatException("Extra bytes at end of method code");
 	}
 	block.removeDirectJumps();
-	// block.removeDirectStackWrites();
+	block.removeDirectStackWrites();
 	this.block = block;
     }
 

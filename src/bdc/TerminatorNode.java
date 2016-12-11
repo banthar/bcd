@@ -5,7 +5,7 @@ import java.util.List;
 public class TerminatorNode extends Node implements bdc.BasicBlockBuilder.Terminator {
 
     public TerminatorNode(final List<Object> description, final OutputPort... input) {
-	super(description, 0, input);
+	super(description, NodeType.TERMINATOR, 0, input);
     }
 
     @Override

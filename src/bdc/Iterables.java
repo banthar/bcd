@@ -20,6 +20,9 @@ public class Iterables {
 	if (iterable.iterator().hasNext()) {
 	    throw new IllegalStateException("Expected empty: " + iterable);
 	}
+    }
 
+    public static boolean isEmpty(final Iterable<?> iterable) {
+	return iterable.iterator().hasNext();
     }
 }

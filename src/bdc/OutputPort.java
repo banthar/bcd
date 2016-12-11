@@ -22,7 +22,7 @@ final class OutputPort {
 	return "out" + String.valueOf(this.n);
     }
 
-    public Iterable<? extends InputPort> getTargets() {
+    public Set<? extends InputPort> getTargets() {
 	return this.targets;
     }
 

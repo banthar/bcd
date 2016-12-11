@@ -42,4 +42,9 @@ final class InputPort {
 	return this.source;
     }
 
+    @Override
+    public String toString() {
+	return getId() + "{" + getNode() + "}";
+    }
+
 }
