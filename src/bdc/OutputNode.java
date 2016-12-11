@@ -1,13 +1,11 @@
 package bdc;
 
-import java.util.List;
+import java.util.Map;
 
 interface OutputNode {
 
-    List<? extends OutputPort> getAllOutputPorts();
+    Map<? extends PortId, ? extends OutputPort> getAllOutputPorts();
 
     OutputPort getOutputEnvironment();
-
-    OutputPort getExtraOutput(final int index);
 
 }

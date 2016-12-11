@@ -48,7 +48,7 @@ final class InputPort {
 
     @Override
     public String toString() {
-	return getId() + "{" + getNode() + "}";
+	return getNode() + "." + getId();
     }
 
 }

@@ -33,4 +33,9 @@ final class OutputPort {
 	    target.link(source);
 	}
     }
+
+    @Override
+    public String toString() {
+	return getNode() + "." + getId();
+    }
 }

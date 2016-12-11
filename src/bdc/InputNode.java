@@ -1,12 +1,9 @@
 package bdc;
 
-import java.util.List;
+import java.util.Map;
 
 interface InputNode {
-    List<? extends InputPort> getAllInputPorts();
+    Map<? extends PortId, ? extends InputPort> getAllInputPorts();
 
     InputPort getInputEnvironment();
-
-    InputPort getExtraInput(final int index);
-
 }

@@ -1,9 +1,10 @@
 package bdc;
 
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 class Node implements InputNode, OutputNode {
@@ -67,36 +68,38 @@ class Node implements InputNode, OutputNode {
 
     }
 
+    static int nextId = 0;
+
+    private final int id = nextId++;
+
     private final NodeType type;
     List<Object> description;
 
-    InputPort inputEnvironment;
-    private final List<InputPort> input;
+    private final Map<PortId, InputPort> input;
 
-    OutputPort outputEnvironment;
-    private final List<OutputPort> output;
+    private final Map<PortId, OutputPort> output;
 
     public Node(final List<Object> description, final NodeType type, final boolean writesMemory, final int outputs,
 	    final OutputPort inputEnvironment, final List<? extends OutputPort> input) {
 	this.description = description;
 	this.type = type;
 
+	this.input = new HashMap<>();
 	if (inputEnvironment != null) {
-	    this.inputEnvironment = new InputPort(this, inputEnvironment);
+	    this.input.put(PortId.environment(), new InputPort(this, inputEnvironment));
 	}
-	this.input = new ArrayList<>();
 	for (int i = 0; i < input.size(); i++) {
 	    final InputPort port = new InputPort(this, input.get(i));
-	    this.input.add(port);
+	    this.input.put(PortId.arg(i), port);
 	}
 
+	this.output = new HashMap<>();
 	if (writesMemory) {
-	    this.outputEnvironment = new OutputPort(this);
+	    this.output.put(PortId.environment(), new OutputPort(this));
 	}
-	this.output = new ArrayList<>();
 	for (int i = 0; i < outputs; i++) {
 	    final OutputPort port = new OutputPort(this);
-	    this.output.add(port);
+	    this.output.put(PortId.arg(i), port);
 	}
     }
 
@@ -110,67 +113,51 @@ class Node implements InputNode, OutputNode {
     }
 
     @Override
-    public List<? extends InputPort> getAllInputPorts() {
-	final ArrayList<InputPort> list = new ArrayList<>();
-	if (this.inputEnvironment != null) {
-	    list.add(this.inputEnvironment);
-	}
-	list.addAll(this.input);
-	return list;
+    public Map<PortId, ? extends InputPort> getAllInputPorts() {
+	return this.input;
     }
 
     @Override
-    public List<? extends OutputPort> getAllOutputPorts() {
-	final ArrayList<OutputPort> list = new ArrayList<>();
-	if (this.outputEnvironment != null) {
-	    list.add(this.outputEnvironment);
-	}
-	list.addAll(this.output);
-	return list;
+    public Map<PortId, ? extends OutputPort> getAllOutputPorts() {
+	return this.output;
     }
 
     public String getNodeId() {
-	return "node" + BasicBlockBuilder.getObjectId(this);
+	return "node" + this.id;
     }
 
-    public Set<Node> getAllTargetNodes() {
+    public Set<Node> getAllLinkedNodes() {
 	final Set<Node> nodes = new HashSet<>();
-	addAllTargetNodes(nodes);
+	getAllLinkedNodes(nodes);
 	return nodes;
 
     }
 
-    private void addAllTargetNodes(final Set<Node> nodes) {
-	for (final OutputPort port : getAllOutputPorts()) {
+    private void getAllLinkedNodes(final Set<Node> nodes) {
+	for (final OutputPort port : getAllOutputPorts().values()) {
 	    for (final InputPort targetPort : port.getTargets()) {
 		final Node targetNode = targetPort.getNode();
 		if (nodes.add(targetNode)) {
-		    targetNode.addAllTargetNodes(nodes);
+		    targetNode.getAllLinkedNodes(nodes);
+		}
+	    }
+	}
+	for (final InputPort port : getAllInputPorts().values()) {
+	    final OutputPort source = port.getSource();
+	    if (source != null) {
+		final Node sourceNode = source.getNode();
+		if (nodes.add(sourceNode)) {
+		    sourceNode.getAllLinkedNodes(nodes);
 		}
 	    }
 	}
     }
 
-    public Set<Node> getAllSourceNodes() {
-	final Set<Node> nodes = new HashSet<>();
-	addAllSourceNodes(nodes);
-	return nodes;
-
-    }
-
-    private void addAllSourceNodes(final Set<Node> nodes) {
-	for (final InputPort port : getAllInputPorts()) {
-	    final Node sourceNode = port.getSource().getNode();
-	    if (nodes.add(sourceNode)) {
-		sourceNode.addAllTargetNodes(nodes);
-	    }
-	}
-    }
-
     public static void merge(final InputNode inputNode, final OutputNode outputNode) {
-	final List<? extends InputPort> input = inputNode.getAllInputPorts();
-	final List<? extends OutputPort> output = outputNode.getAllOutputPorts();
-	if (input.size() != output.size()) {
+	if (inputNode.getAllInputPorts().size() != 1) {
+	    throw new IllegalStateException();
+	}
+	if (outputNode.getAllOutputPorts().size() != 1) {
 	    throw new IllegalStateException();
 	}
 	merge(inputNode.getInputEnvironment(), outputNode.getOutputEnvironment());
@@ -184,27 +171,42 @@ class Node implements InputNode, OutputNode {
 
     @Override
     public InputPort getInputEnvironment() {
-	return this.inputEnvironment;
+	return this.input.get(PortId.environment());
     }
 
-    @Override
-    public InputPort getExtraInput(final int index) {
-	return this.input.get(index);
+    public InputPort getInputArg(final PortId id) {
+	return this.input.get(id);
+    }
+
+    public void addInput(final PortId id, final OutputPort remotePort) {
+	if (this.input.put(id, new InputPort(this, remotePort)) != null) {
+	    throw new IllegalStateException();
+	}
     }
 
     @Override
     public OutputPort getOutputEnvironment() {
-	return this.outputEnvironment;
+	return this.output.get(PortId.environment());
     }
 
-    @Override
-    public OutputPort getExtraOutput(final int index) {
-	return this.output.get(index);
+    public OutputPort getOutputArg(final int index) {
+	return getOutput(PortId.arg(index));
+    }
+
+    public OutputPort getOutput(final PortId id) {
+	return this.output.get(id);
+    }
+
+    public OutputPort addOutput(final PortId id) {
+	final OutputPort newPort = new OutputPort(this);
+	if (this.output.put(id, newPort) != null) {
+	    throw new IllegalStateException();
+	}
+	return newPort;
     }
 
     @Override
     public String toString() {
 	return getNodeId() + "{" + getType() + "}";
     }
-
 }
