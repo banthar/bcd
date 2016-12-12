@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import bdc.Node.NodeType;
@@ -86,6 +87,11 @@ public class BlockTransformations {
 	    while (frame != null) {
 		node.addInput(PortId.stack(i++), frame.head);
 		frame = frame.tail;
+	    }
+	    for (final Entry<Integer, OutputPort> entry : locals.entrySet()) {
+		final int localId = entry.getKey().intValue();
+		final OutputPort storedValue = entry.getValue();
+		node.addInput(PortId.local(localId), storedValue);
 	    }
 	}
 	final Set<? extends InputPort> targets;

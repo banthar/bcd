@@ -3,8 +3,15 @@ package bdc.test;
 public interface Test {
 
     static int f(final int a, final int b) {
-	final boolean c = a > b;
-	return c ? a : c ? a : c ? a : c ? a : c ? a : b;
+	final int c = 10;
+	if (a == 0) {
+	    return c;
+	}
+	final int d = 11;
+	if (b == 0) {
+	    return d;
+	}
+	return a + b;
     }
 
     static int pow(final int a, final int b) {
