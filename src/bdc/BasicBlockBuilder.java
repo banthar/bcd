@@ -372,9 +372,9 @@ public class BasicBlockBuilder {
 
     public void dump(final PrintStream out, final String name) {
 	for (final BasicBlockBuilder block : getAllTargetBlocks()) {
-	    out.println("  subgraph cluster_" + block.getBlockId() + " {");
-	    out.println("    label=\"" + block.getBlockId() + "\";");
-	    out.print("    " + quote(block.inputNode.getNodeId()) + " [");
+	    out.println("    subgraph cluster_" + block.getBlockId() + " {");
+	    out.println("      label=\"" + block.getBlockId() + "\";");
+	    out.print("      " + quote(block.inputNode.getNodeId()) + " [");
 	    out.print("shape = \"record\" label = \"" + block.getBlockId() + " init");
 	    out.print("|{out");
 	    for (final Entry<? extends PortId, ? extends OutputPort> port : block.inputNode.getAllOutputPorts()
@@ -384,21 +384,21 @@ public class BasicBlockBuilder {
 	    out.println("}\"];");
 
 	    for (final Node node : block.inputNode.getAllLinkedNodes()) {
-		out.print("    \"" + node.getNodeId() + "\" [");
-		out.print("shape = \"record\" label = \"");
+		out.print("      \"" + node.getNodeId() + "\" [");
+		out.print("shape = \"record\" label = \"{");
 		out.print("{<in>in");
 		for (final Entry<? extends PortId, ? extends InputPort> entry : node.getAllInputPorts().entrySet()) {
 		    out.format("|<%s> %s", entry.getValue().getId(), entry.getKey() + ": " + entry.getValue().getId());
 		}
-		out.print("}|");
+		out.print("}|{");
 		out.print(Arrays.asList(node.getType(), node.getData()).toString().replace('|', '_').replace('"', ' ')
 			.replace('}', '_').replace('{', '_').replace('$', ' '));
-		out.print("|");
-		out.print("{<out>out");
+		out.print("}|{");
+		out.print("<out>out");
 		for (final Entry<? extends PortId, ? extends OutputPort> entry : node.getAllOutputPorts().entrySet()) {
 		    out.format("|<%s> %s", entry.getValue().getId(), entry.getKey() + ": " + entry.getValue().getId());
 		}
-		out.println("}\"];");
+		out.println("}}\"];");
 	    }
 
 	    final Set<Node> nodes = new HashSet<>(block.inputNode.getAllLinkedNodes());
@@ -407,24 +407,24 @@ public class BasicBlockBuilder {
 		for (final Entry<? extends PortId, ? extends OutputPort> entry : node.getAllOutputPorts().entrySet()) {
 		    final OutputPort sourcePort = entry.getValue();
 		    for (final InputPort targetPort : sourcePort.getTargets()) {
-			out.println("    " + sourcePort.getNode().getNodeId() + ":" + sourcePort.getId() + " -> "
-				+ targetPort.getNode().getNodeId() + ":" + targetPort.getId());
+			out.println("      " + sourcePort.getNode().getNodeId() + ":" + sourcePort.getId() + " -> "
+				+ targetPort.getNode().getNodeId() + ":" + targetPort.getId() + ";");
 		    }
 		}
 	    }
-	    out.println("  }");
+	    out.println("    }");
 
 	}
 	for (final BasicBlockBuilder source : getAllTargetBlocks()) {
 	    for (final BasicBlockBuilder target : source.jumpsOut) {
-		out.println("  " + source.terminator.getId() + ":out -> " + target.inputNode.getNodeId() + ":in;");
+		out.println("    " + source.terminator.getId() + ":out -> " + target.inputNode.getNodeId() + ":in;");
 	    }
 	    if (source.terminator instanceof ReturnValue) {
-		out.println("  " + source.terminator.getId() + ":out -> " + name + "_end;");
+		out.println("    " + source.terminator.getId() + ":out -> " + name + "_end;");
 
 	    }
 	}
-	out.println("  " + name + "_start -> " + this.inputNode.getNodeId() + ":in;");
+	out.println("    " + name + "_start -> " + this.inputNode.getNodeId() + ":in;");
 
     }
 
