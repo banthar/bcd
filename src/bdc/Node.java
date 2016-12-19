@@ -64,7 +64,9 @@ class Node implements InputNode, OutputNode {
 
 		ARRAY_LENGTH,
 
-		TERMINATOR,
+		BRANCH,
+
+		RETURN,
 
 	}
 
@@ -189,6 +191,10 @@ class Node implements InputNode, OutputNode {
 		if (this.input.put(id, new InputPort(this, remotePort)) != null) {
 			throw new IllegalStateException();
 		}
+	}
+
+	public void removeInput(final PortId port) {
+		this.input.remove(port).unlink();
 	}
 
 	@Override

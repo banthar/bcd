@@ -285,15 +285,15 @@ public class BasicBlockBuilder {
 	class ReturnValue extends TerminatorNode {
 
 		public ReturnValue(final OutputPort state) {
-			super(Arrays.asList("return_void"), state);
+			super(Arrays.asList("return_void"), NodeType.RETURN, state);
 		}
 
 		public ReturnValue(final OutputPort state, final PrimitiveType type, final OutputPort ref) {
-			super(Arrays.asList("return_value", type), state, ref);
+			super(Arrays.asList("return_value", type), NodeType.RETURN, state, ref);
 		}
 
 		public ReturnValue(final OutputPort state, final OutputPort exception) {
-			super(Arrays.asList("return_error"), state, exception);
+			super(Arrays.asList("return_error"), NodeType.RETURN, state, exception);
 		}
 
 	}
@@ -309,7 +309,7 @@ public class BasicBlockBuilder {
 	class JumpIf extends TerminatorNode {
 		public JumpIf(final OutputPort state, final PrimitiveType type, final OutputPort left,
 				final CompareType compareType, final OutputPort right) {
-			super(Arrays.asList("jump_if", type, compareType), state, left, right);
+			super(Arrays.asList("jump_if", type, compareType), NodeType.BRANCH, state, left, right);
 		}
 	}
 
@@ -331,7 +331,7 @@ public class BasicBlockBuilder {
 
 	class Jump extends TerminatorNode {
 		public Jump(final OutputPort state) {
-			super(Arrays.asList("jump"), state);
+			super(Arrays.asList("jump"), NodeType.BRANCH, state);
 		}
 	}
 

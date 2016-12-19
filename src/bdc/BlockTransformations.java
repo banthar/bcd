@@ -1,5 +1,6 @@
 package bdc;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -53,6 +54,7 @@ public class BlockTransformations {
 			removePush(block, source, null, 0, new HashMap<>());
 		}
 		addMissingBlockPorts(startBlock, new HashSet<>());
+		removeExtraBlockPorts(startBlock, new HashSet<>());
 	}
 
 	private static void addMissingBlockPorts(final BasicBlockBuilder startBlock,
@@ -76,13 +78,34 @@ public class BlockTransformations {
 		}
 	}
 
+	private static void removeExtraBlockPorts(final BasicBlockBuilder startBlock,
+			final HashSet<BasicBlockBuilder> visited) {
+		if (visited.add(startBlock)) {
+			final Set<PortId> usedPorts = new HashSet<>();
+			for (final BasicBlockBuilder target : startBlock.jumpsOut) {
+				removeExtraBlockPorts(target, visited);
+				usedPorts.addAll(target.inputNode.getAllOutputPorts().keySet());
+			}
+			for (final Entry<? extends PortId, ? extends InputPort> e : new ArrayList<>(
+					startBlock.terminator.getAllInputPorts().entrySet())) {
+				final PortId port = e.getKey();
+				if (port.type == PortType.LOCAL) {
+					if (!usedPorts.contains(port)) {
+						startBlock.terminator.removeInput(port);
+					}
+				}
+			}
+			visited.remove(startBlock);
+		}
+	}
+
 	private static void removePush(final BasicBlockBuilder block, final Node node, final Chain<OutputPort> stack,
 			final int stackArgs, final Map<Integer, OutputPort> locals) {
 		Chain<OutputPort> newStack = stack;
 		int newStackArgs = stackArgs;
 		final Map<Integer, OutputPort> newLocals = new HashMap<>(locals);
 
-		if (node.getType() == NodeType.TERMINATOR) {
+		if (node.getType() == NodeType.BRANCH) {
 			int i = 0;
 			Chain<OutputPort> frame = stack;
 			while (frame != null) {
