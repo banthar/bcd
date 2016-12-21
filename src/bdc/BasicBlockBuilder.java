@@ -392,7 +392,7 @@ public class BasicBlockBuilder {
 				}
 				out.print("}|{");
 				out.print(String.join("|", node.getNodeId(), node.getType().toString(),
-						node.getData().toString().replaceAll("([<>])", "\\\\$1")));
+						node.getData().toString().replaceAll("([<>\"\\\\\\]\\[{}])", "\\\\$1")));
 				out.print("}|{");
 				out.print("<out>out");
 				for (final Entry<? extends PortId, ? extends OutputPort> entry : node.getAllOutputPorts().entrySet()) {
