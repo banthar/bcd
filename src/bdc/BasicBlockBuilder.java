@@ -229,7 +229,7 @@ public class BasicBlockBuilder {
 		}
 		input.addAll(args);
 		final Node operation = new Node(Arrays.asList(type, methodReference), NodeType.INVOKE, true,
-				methodType.isVoid() ? 1 : 2, this.environment, input);
+				methodType.isVoid() ? 0 : 1, this.environment, input);
 		this.environment = operation.getOutputEnvironment();
 		if (methodType.isVoid()) {
 			return Collections.emptyList();
@@ -255,7 +255,7 @@ public class BasicBlockBuilder {
 	}
 
 	public OutputPort newInstance(final ClassReference classReference) {
-		final Node operation = new Node(Arrays.asList("new_instance", classReference), NodeType.NEW_INSTANCE, true, 2,
+		final Node operation = new Node(Arrays.asList("new_instance", classReference), NodeType.NEW_INSTANCE, true, 1,
 				this.environment);
 		this.environment = operation.getOutputEnvironment();
 		return operation.getOutputArg(0);
