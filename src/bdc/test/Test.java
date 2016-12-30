@@ -1,6 +1,12 @@
 package bdc.test;
 
+import java.util.Arrays;
+
 public interface Test {
+
+	default int gdc2(final int a, final int b) {
+		return Arrays.asList(a, b).size();
+	}
 
 	static int gdc(int a, int b) {
 		while (a != b) {

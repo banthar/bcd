@@ -162,7 +162,7 @@ public class BasicBlockBuilder {
 	}
 
 	public void storeElement(final OutputPort arrayref, final OutputPort index) {
-		final Node operation = new Node(Arrays.asList("store_element"), NodeType.STORE_ELEMENT, true, 1,
+		final Node operation = new Node(Arrays.asList("store_element"), NodeType.STORE_ELEMENT, true, 0,
 				this.environment, arrayref, index);
 		this.environment = operation.getOutputEnvironment();
 	}

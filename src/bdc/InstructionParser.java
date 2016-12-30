@@ -74,7 +74,7 @@ public class InstructionParser {
 		final Map<Integer, BasicBlockBuilder> blocks = new HashMap<>();
 		final Function<Integer, BasicBlockBuilder> getBlock = new Function<Integer, BasicBlockBuilder>() {
 			@Override
-			public BasicBlockBuilder apply(Integer id) {
+			public BasicBlockBuilder apply(final Integer id) {
 				BasicBlockBuilder block = blocks.get(id);
 				if (block == null) {
 					block = methodBuilder.createBasicBlock();
@@ -491,8 +491,8 @@ public class InstructionParser {
 					break;
 				case 0xb6: {
 					final MethodReference methodReference = constantPool.getMethodReference(getUnsignedShort(in));
-					final List<OutputPort> returned = block.invokeVirtual(methodReference, block.pop(),
-							readMethodArguments(methodReference.getType(), block));
+					final List<OutputPort> args = readMethodArguments(methodReference.getType(), block);
+					final List<OutputPort> returned = block.invokeVirtual(methodReference, block.pop(), args);
 					for (final OutputPort value : returned) {
 						block.push(value);
 					}
@@ -500,8 +500,8 @@ public class InstructionParser {
 				}
 				case 0xb7: {
 					final MethodReference methodReference = constantPool.getMethodReference(getUnsignedShort(in));
-					final List<OutputPort> returned = block.invokeSpecial(methodReference, block.pop(),
-							readMethodArguments(methodReference.getType(), block));
+					final List<OutputPort> args = readMethodArguments(methodReference.getType(), block);
+					final List<OutputPort> returned = block.invokeSpecial(methodReference, block.pop(), args);
 					for (final OutputPort value : returned) {
 						block.push(value);
 					}
@@ -527,8 +527,8 @@ public class InstructionParser {
 					if (getUnsignedByte(in) != 0) {
 						throw new ClassFormatException("expected 0 byte after invokeinterface");
 					}
-					final List<OutputPort> returned = block.invokeInterface(methodReference, block.pop(),
-							readMethodArguments(methodReference.getType(), block));
+					final List<OutputPort> args = readMethodArguments(methodReference.getType(), block);
+					final List<OutputPort> returned = block.invokeInterface(methodReference, block.pop(), args);
 					for (final OutputPort value : returned) {
 						block.push(value);
 					}
@@ -620,7 +620,7 @@ public class InstructionParser {
 	private static List<OutputPort> readMethodArguments(final MethodType methodType, final BasicBlockBuilder stack) {
 		final List<OutputPort> arguments = new ArrayList<>();
 		for (final Type arg : methodType.getArgumentTypes()) {
-			arguments.add(stack.pop());
+			arguments.add(0, stack.pop());
 		}
 		return arguments;
 	}
