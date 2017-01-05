@@ -157,15 +157,19 @@ public class ConstantPool {
 
 		@Override
 		public String toString() {
-			return getUTF8(this.nameIndex) + " " + getUTF8(this.descriptorIndex);
+			return getUTF8(this.nameIndex) + " " + getDescriptor();
 		}
 
 		public Type getType() {
 			try {
-				return Type.fromDescriptor(getUTF8(this.descriptorIndex));
+				return Type.fromDescriptor(getDescriptor());
 			} catch (final ClassFormatException e) {
 				throw new IllegalStateException(e);
 			}
+		}
+
+		private String getDescriptor() {
+			return getUTF8(this.descriptorIndex);
 		}
 
 		public String getName() {
@@ -184,7 +188,15 @@ public class ConstantPool {
 
 		@Override
 		public String toString() {
-			return getClassReference(this.classIndex) + " " + getNameAndType(this.nameAndTypeIndex);
+			return getOwnerClass() + " " + getNameAndType(this.nameAndTypeIndex);
+		}
+
+		public ClassReference getOwnerClass() {
+			return getClassReference(this.classIndex);
+		}
+
+		public String getName() {
+			return getNameAndType(this.nameAndTypeIndex).getName();
 		}
 
 		public MethodType getType() {
@@ -197,6 +209,10 @@ public class ConstantPool {
 				size += arg.getByteCodeSize();
 			}
 			return size;
+		}
+
+		public String getDescriptor() {
+			return getNameAndType(this.nameAndTypeIndex).getDescriptor();
 		}
 	}
 
@@ -237,15 +253,19 @@ public class ConstantPool {
 
 		@Override
 		public String toString() {
-			return getUTF8(this.nameIndex);
+			return getName();
 		}
 
 		public String getJavaName() {
-			return getUTF8(this.nameIndex).replace('/', '.');
+			return getName().replace('/', '.');
+		}
+
+		public String getName() {
+			return getUTF8(this.nameIndex);
 		}
 
 		public ReferenceType getType() {
-			return ReferenceType.fromClassName(getUTF8(this.nameIndex));
+			return ReferenceType.fromClassName(getName());
 		}
 
 		@Override

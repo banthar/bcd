@@ -36,6 +36,15 @@ public class Class {
 		return this.thisClass;
 	}
 
+	public Method getMethod(final String name, final String descriptor) throws NoSuchMethodException {
+		for (final Method m : this.methods) {
+			if (m.getName().equals(name) && m.getDescriptor().equals(descriptor)) {
+				return m;
+			}
+		}
+		throw new NoSuchMethodException("No such method: " + this.thisClass + " " + name + descriptor);
+	}
+
 	public Method[] getMethods() {
 		return this.methods;
 	}

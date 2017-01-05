@@ -7,7 +7,7 @@
 			<accessrule kind="accessible" pattern="java/net/**"/>
 			<accessrule kind="accessible" pattern="java/util/**"/>
 			<accessrule kind="accessible" pattern="java/io/**"/>
-			<accessrule kind="accessible" pattern="java/nio/*"/>
+			<accessrule kind="accessible" pattern="java/nio/**"/>
 			<accessrule kind="nonaccessible" pattern="**"/>
 		</accessrules>
 	</classpathentry>

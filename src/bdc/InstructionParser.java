@@ -439,10 +439,10 @@ public class InstructionParser {
 					final int defaultOffset = in.getInt() + opcodeOffset;
 					final int low = in.getInt();
 					final int high = in.getInt();
-					final Map<Integer, Integer> lookupTable = new HashMap<>();
+					final Map<Integer, BasicBlockBuilder> lookupTable = new HashMap<>();
 					for (int i = low; i <= high; i++) {
 						final int offset = in.getInt() + opcodeOffset;
-						lookupTable.put(i, offset);
+						lookupTable.put(i, getBlock.apply(offset));
 					}
 					block.jumpTable(block.pop(), defaultOffset, lookupTable);
 					break;
@@ -455,11 +455,11 @@ public class InstructionParser {
 					}
 					final int defaultOffset = in.getInt() + opcodeOffset;
 					final int n = in.getInt();
-					final Map<Integer, Integer> lookupTable = new HashMap<>();
+					final Map<Integer, BasicBlockBuilder> lookupTable = new HashMap<>();
 					for (int i = 0; i < n; i++) {
 						final int match = in.getInt();
 						final int offset = in.getInt() + opcodeOffset;
-						lookupTable.put(match, offset);
+						lookupTable.put(match, getBlock.apply(offset));
 					}
 					block.jumpTable(block.pop(), defaultOffset, lookupTable);
 					break;

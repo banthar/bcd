@@ -228,8 +228,8 @@ public class BasicBlockBuilder {
 			input.add(target);
 		}
 		input.addAll(args);
-		final Node operation = new Node(Arrays.asList(type, methodReference), NodeType.INVOKE, true,
-				methodType.isVoid() ? 0 : 1, this.environment, input);
+		final Node operation = new Node(methodReference, NodeType.INVOKE, true, methodType.isVoid() ? 0 : 1,
+				this.environment, input);
 		this.environment = operation.getOutputEnvironment();
 		if (methodType.isVoid()) {
 			return Collections.emptyList();
@@ -325,8 +325,12 @@ public class BasicBlockBuilder {
 		terminate(new JumpIf(this.environment, type, left, compareType, right));
 	}
 
-	public void jumpTable(final OutputPort value, final int defaultOffset, final Map<Integer, Integer> table) {
-		throw new IllegalStateException();
+	public void jumpTable(final OutputPort value, final int defaultOffset,
+			final Map<Integer, BasicBlockBuilder> table) {
+		for (final BasicBlockBuilder target : table.values()) {
+			referenceTo(target);
+		}
+		terminate(new Jump(this.environment));
 	}
 
 	class Jump extends TerminatorNode {

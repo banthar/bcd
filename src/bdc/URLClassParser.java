@@ -5,12 +5,15 @@ import java.io.DataInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintStream;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import bdc.ConstantPool.ClassReference;
 
@@ -18,11 +21,17 @@ public class URLClassParser {
 
 	private final URL[] urls;
 
+	private final Map<String, Class> cache = new HashMap<>();
+
 	public URLClassParser(final URL[] urls) {
 		this.urls = urls;
 	}
 
-	public Class loadClass(final String name) throws IOException, ClassFormatException {
+	public Class loadClass(final String name) throws IOException, ClassFormatException, ClassNotFoundException {
+		final Class cached = this.cache.get(name);
+		if (cached != null) {
+			return cached;
+		}
 		try {
 			for (final URL url : this.urls) {
 				final URI absoluteURI = url.toURI().resolve(new URI(null, null, name + ".class", null));
@@ -32,12 +41,13 @@ public class URLClassParser {
 					if (dataInput.read() != -1) {
 						throw new ClassFormatException("Extra bytes at end of class");
 					}
+					this.cache.put(name, parsedClass);
 					return parsedClass;
 				} catch (final FileNotFoundException e) {
 					continue;
 				}
 			}
-			throw new IllegalStateException("Class not found: " + name);
+			throw new ClassNotFoundException("Class not found: " + name);
 		} catch (final URISyntaxException | MalformedURLException e) {
 			throw new IllegalStateException(e);
 		}
@@ -71,6 +81,9 @@ public class URLClassParser {
 				dataInput.readFully(new byte[length]);
 				break;
 			case "BootstrapMethods":
+				dataInput.readFully(new byte[length]);
+				break;
+			case "EnclosingMethod":
 				dataInput.readFully(new byte[length]);
 				break;
 			case "SourceFile":
@@ -136,7 +149,7 @@ public class URLClassParser {
 
 			}
 		}
-		return new Method(thisClass, accessFlags, constantPool.getUTF8(nameIndex),
+		return new Method(this, constantPool, thisClass, accessFlags, constantPool.getUTF8(nameIndex),
 				constantPool.getUTF8(descriptorIndex), code, exceptions, signature);
 	}
 
@@ -185,5 +198,17 @@ public class URLClassParser {
 			interfaces[i] = constantPool.getClassReference(dataInput.readUnsignedShort());
 		}
 		return interfaces;
+	}
+
+	public void dump(final PrintStream out) {
+		out.println("digraph G {");
+		for (final Class c : this.cache.values()) {
+			out.println("  subgraph cluster_" + c.getName().toString().replace('/', '_').replace('$', '_') + " {");
+			for (final Method m : c.getMethods()) {
+				m.dump(out);
+			}
+			out.println("}");
+		}
+		out.println("}");
 	}
 }
