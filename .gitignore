@@ -1,5 +1,5 @@
 bin/
-*.gv
+*.dot
 *.elf
 *.o
 *.so

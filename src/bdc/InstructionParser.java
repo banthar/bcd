@@ -343,7 +343,9 @@ public class InstructionParser {
 					final int n = opcode - 0x60;
 					final PrimitiveType type = PrimitiveType.fromId(n % 4);
 					final BinaryOperationType op = BinaryOperationType.fromId(n / 4);
-					block.push(block.binaryOperation(type, op, block.pop(), block.pop()));
+					final OutputPort right = block.pop();
+					final OutputPort left = block.pop();
+					block.push(block.binaryOperation(type, op, left, right));
 					break;
 				}
 				case 0x74:

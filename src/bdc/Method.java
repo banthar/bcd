@@ -11,6 +11,7 @@ import bdc.ConstantPool.ClassReference;
 import bdc.ConstantPool.MethodReference;
 import bdc.Node.NodeType;
 import bdc.Type.MethodType;
+import bdc.Type.PrimitiveType;
 
 public class Method {
 
@@ -96,11 +97,46 @@ public class Method {
 		}
 	}
 
+	public BasicBlockBuilder getBlock() {
+		return this.block;
+	}
+
 	@Override
 	public String toString() {
 		return "Method [accessFlags=" + this.accessFlags + ", name=" + this.name + ", descriptor=" + this.descriptor
 				+ ", code=" + Arrays.toString(this.code) + ", exceptions=" + this.exceptions + ", signature="
 				+ this.signature + "]";
+	}
+
+	public void assertReturnsConstantInt(final int expectedValue) {
+		if (this.block.terminator.getType() != NodeType.RETURN) {
+			throw new IllegalStateException();
+		}
+		if (this.block.terminator.getAllInputPorts().size() != 2) {
+			throw new IllegalStateException();
+		}
+
+		if (this.block.terminator.getInput(PortId.environment()).getSource().getNode().getType() != NodeType.INIT) {
+			throw new IllegalStateException();
+		}
+		final Node sourceNode = this.block.terminator.getInput(PortId.arg(0)).getSource().getNode();
+		if (sourceNode.getData() instanceof LoadConstantOperation) {
+			final LoadConstantOperation data = (LoadConstantOperation) sourceNode.getData();
+			if (data.getType() != PrimitiveType.Integer) {
+				throw new IllegalStateException();
+			}
+			if (data.getValue() instanceof Integer) {
+				final int actualValue = ((Integer) data.getValue()).intValue();
+				if (actualValue != expectedValue) {
+					throw new AssertionError("expected: " + expectedValue + " but was " + actualValue);
+				}
+			} else {
+				throw new IllegalStateException();
+			}
+		} else {
+			throw new IllegalStateException();
+		}
+
 	}
 
 }

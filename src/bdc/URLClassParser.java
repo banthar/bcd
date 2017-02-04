@@ -34,7 +34,8 @@ public class URLClassParser {
 		}
 		try {
 			for (final URL url : this.urls) {
-				final URI absoluteURI = url.toURI().resolve(new URI(null, null, name + ".class", null));
+				final URI absoluteURI = url.toURI()
+						.resolve(new URI(null, null, name.replace('.', '/') + ".class", null));
 				try (InputStream input = absoluteURI.toURL().openStream()) {
 					final DataInputStream dataInput = new DataInputStream(input);
 					final Class parsedClass = parseClass(dataInput);
@@ -98,6 +99,9 @@ public class URLClassParser {
 				}
 				signature = constantPool.getUTF8(dataInput.readUnsignedShort());
 				break;
+			case "RuntimeVisibleAnnotations":
+				dataInput.readFully(new byte[length]);
+				break;
 			default:
 				throw new ClassFormatException("Unknown class attribute: " + name);
 			}
@@ -143,6 +147,12 @@ public class URLClassParser {
 					throw new ClassFormatException("Invalid Signature attribute length");
 				}
 				signature = constantPool.getUTF8(dataInput.readUnsignedShort());
+				break;
+			case "RuntimeInvisibleAnnotations":
+				dataInput.readFully(new byte[length]);
+				break;
+			case "RuntimeVisibleAnnotations":
+				dataInput.readFully(new byte[length]);
 				break;
 			default:
 				throw new ClassFormatException("Unknown method attribute: " + name);

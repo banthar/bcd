@@ -1,6 +1,6 @@
 package bdc.test;
 
-public interface Test {
+public interface Test2 {
 	public static int f() {
 		int a = 10;
 		a += 1;

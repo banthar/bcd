@@ -64,8 +64,19 @@ public class PureOperation {
 		if (values.size() != this.inputPorts) {
 			throw new IllegalStateException();
 		}
-		// TODO
-		return (Integer) values.get(0) + (Integer) values.get(1);
+		if (this.operation instanceof BinaryOperationType) {
+			switch ((BinaryOperationType) this.operation) {
+			case Add:
+				return (Integer) values.get(0) + (Integer) values.get(1);
+			case Subtract:
+				return (Integer) values.get(0) - (Integer) values.get(1);
+			case Multiply:
+				return (Integer) values.get(0) * (Integer) values.get(1);
+			case Divide:
+				return (Integer) values.get(0) / (Integer) values.get(1);
+			}
+		}
+		throw new IllegalStateException("Invalid operation: " + this.operation);
 	}
 
 	public Type getReturnType() {
