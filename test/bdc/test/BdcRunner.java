@@ -5,6 +5,7 @@ import java.io.PrintStream;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.runner.Description;
@@ -12,6 +13,7 @@ import org.junit.runner.Runner;
 import org.junit.runner.notification.Failure;
 import org.junit.runner.notification.RunNotifier;
 
+import bdc.Type;
 import bdc.URLClassParser;
 
 public class BdcRunner extends Runner {
@@ -45,8 +47,10 @@ public class BdcRunner extends Runner {
 			final Description d = Description.createTestDescription(this.testClass, m.getName());
 			runNotifier.fireTestStarted(d);
 			try {
-				final int expectedValue = (Integer) m.invoke(null);
-				runTest(m.getName(), expectedValue);
+				final Object expectedValue = m.invoke(null);
+				final String descriptor = new Type.MethodType(Arrays.asList(), Type.fromJavaClass(m.getReturnType()))
+						.toDescriptor();
+				runTest(m.getName(), descriptor, expectedValue);
 			} catch (final Throwable e) {
 				runNotifier.fireTestFailure(new Failure(d, e));
 			}
@@ -54,13 +58,13 @@ public class BdcRunner extends Runner {
 		}
 	}
 
-	public void runTest(final String name, final int expectedValue) throws Exception {
+	public void runTest(final String name, final String signature, final Object expectedValue) throws Exception {
 		final URLClassParser loader = new URLClassParser(new URL[] { this.testClass.getResource("/") });
 		final bdc.Class type = loader.loadClass(this.testClass.getName());
-		final bdc.Method m = type.getMethod(name, "()I");
+		final bdc.Method m = type.getMethod(name, signature);
 		m.parse();
 		try {
-			m.assertReturnsConstantInt(expectedValue);
+			m.assertReturnsConstant(expectedValue);
 		} catch (final Throwable e) {
 			try (final PrintStream out = new PrintStream(new File(name + ".dot"))) {
 				out.println("digraph G {");

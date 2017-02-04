@@ -92,4 +92,18 @@ public class ConstantPropagationTest {
 		return Integer.MIN_VALUE / -1;
 	}
 
+	@MethodReturnsConstant
+	public static boolean return_true() {
+		return true;
+	}
+
+	@MethodReturnsConstant
+	public static boolean return_false() {
+		return false;
+	}
+
+	@MethodReturnsConstant
+	public static boolean simplify_comparison() {
+		return 1 > 0;
+	}
 }

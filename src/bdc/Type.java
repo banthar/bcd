@@ -25,16 +25,25 @@ public interface Type {
 		public int getByteCodeSize() {
 			return 1;
 		}
+
+		@Override
+		public String toDescriptor() {
+			throw new IllegalStateException();
+		}
+
 	}
 
 	public enum PrimitiveType implements FieldType {
-		Integer("int"), Long("long"), Float("float"), Double("double"), Reference("Object"), Byte("byte"), Char(
-				"char"), Short("short"), Boolean("boolean");
+		Integer("int", "I"), Long("long", "L"), Float("float", "F"), Double("double", "D"), Reference("Object",
+				"LObject;"), Byte("byte", "B"), Char("char", "C"), Short("short", "S"), Boolean("boolean", "Z");
 
 		private final String javaName;
 
-		private PrimitiveType(final String shortName) {
+		private final String descriptor;
+
+		private PrimitiveType(final String shortName, final String descriptor) {
 			this.javaName = shortName;
+			this.descriptor = descriptor;
 		}
 
 		@Override
@@ -74,6 +83,21 @@ public interface Type {
 			return this == Long || this == Double ? 2 : 1;
 		}
 
+		@Override
+		public String toDescriptor() {
+			return descriptor;
+		}
+
+		static Type fromJavaType(final java.lang.Class<?> type) {
+			if (type == int.class) {
+				return PrimitiveType.Integer;
+			} else if (type == boolean.class) {
+				return PrimitiveType.Boolean;
+			} else {
+				throw new IllegalStateException();
+			}
+		}
+
 	}
 
 	class ArrayType implements FieldType {
@@ -97,6 +121,11 @@ public interface Type {
 		@Override
 		public String toString() {
 			return "Array<" + elementType + ">";
+		}
+
+		@Override
+		public String toDescriptor() {
+			return "[" + elementType.toDescriptor() + ";";
 		}
 
 	}
@@ -125,6 +154,11 @@ public interface Type {
 		@Override
 		public String toString() {
 			return "Reference<" + name + ">";
+		}
+
+		@Override
+		public String toDescriptor() {
+			return "L" + name + ";";
 		}
 	}
 
@@ -158,6 +192,14 @@ public interface Type {
 		public static MethodType fromDescriptor(final String descriptor) throws ClassFormatException {
 			return (MethodType) Type.fromDescriptor(descriptor);
 		}
+
+		@Override
+		public String toDescriptor() {
+			if (!argumentTypes.isEmpty()) {
+				throw new IllegalStateException();
+			}
+			return "()" + returnType.toDescriptor();
+		}
 	}
 
 	class VoidType implements Type {
@@ -165,6 +207,11 @@ public interface Type {
 		@Override
 		public String toString() {
 			return "Void";
+		}
+
+		@Override
+		public String toDescriptor() {
+			return "V";
 		}
 
 	}
@@ -177,6 +224,8 @@ public interface Type {
 		}
 		return type;
 	}
+
+	String toDescriptor();
 
 	static Type parseFieldTypeSignature(final CharBuffer buffer) throws ClassFormatException {
 		final char c = buffer.get();
@@ -351,6 +400,15 @@ public interface Type {
 			return fromDescriptor("Ljava/lang/String;");
 		} catch (final ClassFormatException e) {
 			throw new IllegalStateException();
+		}
+	}
+
+	static Type fromJavaClass(final java.lang.Class<?> type) {
+		if (type.isPrimitive()) {
+			return PrimitiveType.fromJavaType(type);
+		} else {
+			throw new IllegalStateException("Unknown java type: " + type);
+
 		}
 	}
 }

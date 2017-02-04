@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 import bdc.ConstantPool.ClassReference;
 import bdc.ConstantPool.MethodReference;
@@ -108,16 +109,17 @@ public class Method {
 				+ this.signature + "]";
 	}
 
-	public void assertReturnsConstantInt(final int expectedValue) {
+	public void assertReturnsConstant(final Object expectedValue) {
 		if (this.block.terminator.getType() != NodeType.RETURN) {
-			throw new IllegalStateException();
+			throw new AssertionError("Expected straight return not: " + this.block.terminator);
 		}
 		if (this.block.terminator.getAllInputPorts().size() != 2) {
 			throw new IllegalStateException();
 		}
 
-		if (this.block.terminator.getInput(PortId.environment()).getSource().getNode().getType() != NodeType.INIT) {
-			throw new IllegalStateException();
+		final Node environmentSource = this.block.terminator.getInput(PortId.environment()).getSource().getNode();
+		if (environmentSource.getType() != NodeType.INIT) {
+			throw new IllegalStateException("Method modifies environment: " + environmentSource);
 		}
 		final Node sourceNode = this.block.terminator.getInput(PortId.arg(0)).getSource().getNode();
 		if (sourceNode.getData() instanceof LoadConstantOperation) {
@@ -125,18 +127,32 @@ public class Method {
 			if (data.getType() != PrimitiveType.Integer) {
 				throw new IllegalStateException();
 			}
-			if (data.getValue() instanceof Integer) {
-				final int actualValue = ((Integer) data.getValue()).intValue();
-				if (actualValue != expectedValue) {
-					throw new AssertionError("expected: " + expectedValue + " but was " + actualValue);
-				}
-			} else {
-				throw new IllegalStateException();
+			final Object actualValue = data.getValue();
+			if (!isEqual(actualValue, expectedValue)) {
+				throw new AssertionError("expected: " + toString(expectedValue) + " but was " + toString(actualValue));
 			}
 		} else {
 			throw new IllegalStateException();
 		}
 
+	}
+
+	private String toString(final Object value) {
+		if (value == null) {
+			return "null";
+		} else {
+			return value.getClass().getSimpleName() + "(" + value + ")";
+		}
+	}
+
+	private boolean isEqual(final Object actualValue, final Object expectedValue) {
+		final Object registerValue;
+		if (expectedValue instanceof Boolean) {
+			registerValue = ((Boolean) expectedValue).booleanValue() ? 1 : 0;
+		} else {
+			registerValue = expectedValue;
+		}
+		return Objects.equals(actualValue, registerValue);
 	}
 
 }
