@@ -2,6 +2,7 @@ package bdc;
 
 import java.nio.CharBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public interface Type {
@@ -168,11 +169,85 @@ public interface Type {
 
 	}
 
+	static Type fromSignature(final String signature) throws ClassFormatException {
+		final CharBuffer buffer = CharBuffer.wrap(signature);
+		final Type type = parseFieldTypeSignature(buffer);
+		if (buffer.position() != buffer.capacity()) {
+			throw signatureParseError(buffer, "extra characters");
+		}
+		return type;
+	}
+
+	static Type parseFieldTypeSignature(final CharBuffer buffer) throws ClassFormatException {
+		final char c = buffer.get();
+		switch (c) {
+		case 'L':
+			return readClassTypeSignature(buffer);
+		case '[':
+			throw new IllegalStateException();
+		case 'T':
+			final String name = readUntil(buffer, Arrays.asList('.', ';', '[', '/', '<', '>'));
+			expect(buffer, ';');
+			return typeVariable(name);
+		default:
+			throw signatureParseError(buffer, "unknown signature type: \"" + c + "\"");
+		}
+	}
+
+	static Type typeVariable(final String name) {
+		return getUnknown();
+	}
+
+	static Type readClassTypeSignature(final CharBuffer buffer) throws ClassFormatException {
+		final String name = readUntil(buffer, Arrays.asList('.', ';', '[', '<', '>'));
+		final char c = buffer.get();
+		switch (c) {
+		case ';':
+			return new ReferenceType(name);
+		case '<':
+			while (buffer.get(buffer.position()) != '>') {
+				readTypeArgument(buffer);
+				if (buffer.position() == buffer.capacity()) {
+					throw signatureParseError(buffer, "expected: \">\"");
+				}
+			}
+			buffer.get();
+			expect(buffer, ';');
+			return new ReferenceType(name);
+		default:
+			throw signatureParseError(buffer, "unexpected character: \"" + c + "\"");
+		}
+	}
+
+	static void expect(final CharBuffer buffer, final char expected) throws ClassFormatException {
+		if (buffer.get(buffer.position()) != expected) {
+			throw signatureParseError(buffer, "expected: \"" + expected + "\"");
+		}
+		buffer.get();
+	}
+
+	static Type readTypeArgument(final CharBuffer buffer) throws ClassFormatException {
+		final char c = buffer.get(buffer.position());
+		switch (c) {
+		case '+':
+			buffer.get();
+			return parseFieldTypeSignature(buffer);
+		case '-':
+			buffer.get();
+			return parseFieldTypeSignature(buffer);
+		case '*':
+			buffer.get();
+			return wildcard();
+		default:
+			return parseFieldTypeSignature(buffer);
+		}
+	}
+
 	static Type fromDescriptor(final String descriptor) throws ClassFormatException {
 		final CharBuffer buffer = CharBuffer.wrap(descriptor);
 		final Type type = parseType(buffer);
 		if (buffer.position() != buffer.capacity()) {
-			throw parseError(buffer, "extra characters");
+			throw descriptorParseError(buffer, "extra characters");
 		}
 		return type;
 	}
@@ -192,21 +267,10 @@ public interface Type {
 			return PrimitiveType.Integer;
 		case 'J':
 			return PrimitiveType.Long;
-		case 'L': {
-			final int start = buffer.position();
-			int end = start;
-			while (buffer.get(end) != ';') {
-				end++;
-				if (end == buffer.capacity()) {
-					throw parseError(buffer, "missing ;");
-				}
-			}
-			final char[] nameBuffer = new char[end - start];
-			buffer.get(nameBuffer);
-			final String name = new String(nameBuffer);
+		case 'L':
+			final String name = readUntil(buffer, Arrays.asList(';'));
 			buffer.get();
 			return new ReferenceType(name);
-		}
 		case 'S':
 			return PrimitiveType.Short;
 		case 'Z':
@@ -223,19 +287,43 @@ public interface Type {
 				argumentTypes.add((FieldType) parseType(buffer));
 			}
 			if (buffer.get() != ')') {
-				throw parseError(buffer, "expected \")\"");
+				throw descriptorParseError(buffer, "expected \")\"");
 			}
 			final Type returnType = parseType(buffer);
 			return new MethodType(argumentTypes, returnType);
 		}
 		default:
-			throw parseError(buffer, "unknown type: \"" + c + "\"");
+			throw descriptorParseError(buffer, "unknown type: \"" + c + "\"");
 		}
 	}
 
-	static ClassFormatException parseError(final CharBuffer buffer, final String message) {
+	static String readUntil(final CharBuffer buffer, final List<Character> terminators) throws ClassFormatException {
+		final int start = buffer.position();
+		int end = start;
+		while (!terminators.contains(buffer.get(end))) {
+			end++;
+			if (end == buffer.capacity()) {
+				throw descriptorParseError(buffer, "expected " + String.join(" or " + terminators));
+			}
+		}
+		final char[] nameBuffer = new char[end - start];
+		buffer.get(nameBuffer);
+		return new String(nameBuffer);
+	}
+
+	static ClassFormatException signatureParseError(final CharBuffer buffer, final String message) {
+		final StringBuilder builder = new StringBuilder();
+		builder.append("Invalid type signature \"");
+		return parseError(builder, buffer, message);
+	}
+
+	static ClassFormatException descriptorParseError(final CharBuffer buffer, final String message) {
 		final StringBuilder builder = new StringBuilder();
 		builder.append("Invalid type descriptor \"");
+		return parseError(builder, buffer, message);
+	}
+
+	static ClassFormatException parseError(final StringBuilder builder, final CharBuffer buffer, final String message) {
 		final CharBuffer readOnly = buffer.asReadOnlyBuffer();
 		readOnly.position(0);
 		builder.append(readOnly);
@@ -243,11 +331,19 @@ public interface Type {
 		builder.append(buffer.position());
 		builder.append(": ");
 		builder.append(message);
+		builder.append(": \"");
+		readOnly.position(buffer.position());
+		builder.append(readOnly);
+		builder.append("\"");
 		return new ClassFormatException(builder.toString());
 	}
 
 	static FieldType getUnknown() {
 		return UnknownType.INSTANCE;
+	}
+
+	static Type wildcard() {
+		return getUnknown();
 	}
 
 	static Type string() {

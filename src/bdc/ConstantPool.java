@@ -100,19 +100,20 @@ public class ConstantPool {
 		case InvokeDynamic: {
 			final int bootstrapMethodAttrIndex = dataInput.readUnsignedShort();
 			final int nameAndType = dataInput.readUnsignedShort();
-			return null;
+			throw new IllegalStateException(
+					"InvokeDynamic(" + bootstrapMethodAttrIndex + "," + nameAndType + ") not supported");
 		}
 		case MethodHandle: {
 			final int referenceKind = dataInput.readUnsignedByte();
 			final int referenceIndex = dataInput.readUnsignedShort();
-			return null;
+			throw new IllegalStateException("MethodHandle(" + referenceKind + "," + referenceIndex + ") not supported");
 		}
 		case MethodType: {
 			final int descriptorIndex = dataInput.readUnsignedShort();
-			return null;
+			throw new IllegalStateException("MethodType(" + descriptorIndex + ") not supported");
 		}
 		default:
-			throw new IllegalStateException("Unsupported constant type: " + type);
+			throw new ClassFormatException("Unsupported constant type: " + type);
 		}
 	}
 
@@ -140,6 +141,22 @@ public class ConstantPool {
 		return (NameAndType) this.constants[index];
 	}
 
+	public Type getDescriptor(final int index) {
+		try {
+			return Type.fromDescriptor(getUTF8(index));
+		} catch (final ClassFormatException e) {
+			throw new IllegalStateException(e);
+		}
+	}
+
+	public Type getSignature(final int index) {
+		try {
+			return Type.fromSignature(getUTF8(index));
+		} catch (final ClassFormatException e) {
+			throw new IllegalStateException(e);
+		}
+	}
+
 	@Override
 	public String toString() {
 		return "ConstantPool [constants=" + Arrays.toString(this.constants) + "]";
@@ -161,11 +178,7 @@ public class ConstantPool {
 		}
 
 		public Type getType() {
-			try {
-				return Type.fromDescriptor(getDescriptor());
-			} catch (final ClassFormatException e) {
-				throw new IllegalStateException(e);
-			}
+			return ConstantPool.this.getDescriptor(this.descriptorIndex);
 		}
 
 		private String getDescriptor() {
@@ -282,4 +295,5 @@ public class ConstantPool {
 	public interface LongValueConstant {
 		OutputPort visit(BasicBlockBuilder visitor);
 	}
+
 }

@@ -4,6 +4,7 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,10 +53,10 @@ public class InstructionParser {
 				dataInput.readFully(new byte[length]);
 				break;
 			case "LocalVariableTypeTable":
-				dataInput.readFully(new byte[length]);
+				readLocalVariableTypeTable(dataInput, constantPool);
 				break;
 			case "LocalVariableTable":
-				dataInput.readFully(new byte[length]);
+				readLocalVariableTable(dataInput, constantPool);
 				break;
 			case "StackMapTable":
 				dataInput.readFully(new byte[length]);
@@ -66,6 +67,34 @@ public class InstructionParser {
 			}
 		}
 		return block;
+	}
+
+	private static void readLocalVariableTable(final DataInputStream dataInput, final ConstantPool constantPool)
+			throws IOException {
+		final int n = dataInput.readUnsignedShort();
+		for (int i = 0; i < n; i++) {
+			final int startPc = dataInput.readUnsignedShort();
+			final int length = dataInput.readUnsignedShort();
+			final int name_index = dataInput.readUnsignedShort();
+			final int descriptor_index = dataInput.readUnsignedShort();
+			final int index = dataInput.readUnsignedShort();
+			System.out.println(Arrays.asList(startPc, length, constantPool.getUTF8(name_index),
+					constantPool.getDescriptor(descriptor_index), index));
+		}
+	}
+
+	private static void readLocalVariableTypeTable(final DataInputStream dataInput, final ConstantPool constantPool)
+			throws IOException {
+		final int n = dataInput.readUnsignedShort();
+		for (int i = 0; i < n; i++) {
+			final int startPc = dataInput.readUnsignedShort();
+			final int length = dataInput.readUnsignedShort();
+			final int name_index = dataInput.readUnsignedShort();
+			final int signature_index = dataInput.readUnsignedShort();
+			final int index = dataInput.readUnsignedShort();
+			System.out.println(Arrays.asList(startPc, length, constantPool.getUTF8(name_index),
+					constantPool.getSignature(signature_index), index));
+		}
 	}
 
 	private static BasicBlockBuilder parseInstructions(final MethodBuilder methodBuilder, final ByteBuffer in,
