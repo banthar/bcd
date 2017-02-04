@@ -178,4 +178,106 @@ public class ConstantPropagationTest {
 			return false;
 		}
 	}
+
+	@MethodReturnsConstant
+	public static int remove_table_switch_take_first_branch() {
+		int a;
+		a = 0;
+		switch (a) {
+		case 0:
+			return 1000;
+		case 1:
+			return 2000;
+		}
+		return 3000;
+	}
+
+	@MethodReturnsConstant
+	public static int remove_table_switch_take_second_branch() {
+		int a;
+		a = 1;
+		switch (a) {
+		case 0:
+			return 1000;
+		case 1:
+			return 2000;
+		}
+		return 3000;
+	}
+
+	@MethodReturnsConstant
+	public static int remove_table_switch_take_default_branch() {
+		int a;
+		a = 2;
+		switch (a) {
+		case 0:
+			return 1000;
+		case 1:
+			return 2000;
+		}
+		return 3000;
+	}
+
+	@MethodReturnsConstant
+	public static int remove_table_switch_take_common_branch() {
+		int a;
+		a = 0;
+		switch (a) {
+		case 0:
+		case 1:
+			return 1;
+		}
+		return 3;
+	}
+
+	@MethodReturnsConstant
+	public static int remove_lookup_switch_take_first_branch() {
+		int a;
+		a = 1000;
+		switch (a) {
+		case 1000:
+			return 1;
+		case 2000:
+			return 2;
+		}
+		return 3;
+	}
+
+	@MethodReturnsConstant
+	public static int remove_lookup_switch_take_second_branch() {
+		int a;
+		a = 2000;
+		switch (a) {
+		case 1000:
+			return 1;
+		case 2000:
+			return 2;
+		}
+		return 3;
+	}
+
+	@MethodReturnsConstant
+	public static int remove_lookup_switch_take_default_branch() {
+		int a;
+		a = 3000;
+		switch (a) {
+		case 1000:
+			return 1;
+		case 2000:
+			return 2;
+		}
+		return 3;
+	}
+
+	@MethodReturnsConstant
+	public static int remove_lookup_switch_take_common_branch() {
+		int a;
+		a = 1000;
+		switch (a) {
+		case 2000:
+		case 1000:
+			return 1;
+		}
+		return 3;
+	}
 }

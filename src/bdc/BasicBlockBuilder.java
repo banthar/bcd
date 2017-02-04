@@ -310,12 +310,10 @@ public class BasicBlockBuilder {
 				left, right), then, otherwise);
 	}
 
-	public void jumpTable(final OutputPort value, final int defaultOffset,
-			final Map<Integer, BasicBlockBuilder> table) {
-		for (final BasicBlockBuilder target : table.values()) {
-			referenceTo(target);
-		}
-		terminate(Node.terminator(Arrays.asList("jump_table", defaultOffset), this.environment, value));
+	public void jumpTable(final OutputPort value, final int defaultOffset, final Map<Integer, Integer> lookupTable,
+			final List<BasicBlockBuilder> targets) {
+		terminate(Node.terminator(new JumpTable(defaultOffset, lookupTable), this.environment, value),
+				targets.toArray(new BasicBlockBuilder[0]));
 	}
 
 	public void jump(final BasicBlockBuilder target) {
@@ -333,6 +331,9 @@ public class BasicBlockBuilder {
 		if (this.terminator != null || this.environment == null) {
 			throw new IllegalStateException();
 		}
+		if (new HashSet<>(Arrays.asList(targets)).size() != targets.length) {
+			throw new IllegalStateException("Duplicate targets");
+		}
 		for (final BasicBlockBuilder target : targets) {
 			referenceTo(target);
 		}
@@ -342,8 +343,6 @@ public class BasicBlockBuilder {
 
 	public void simplifyJump(final BasicBlockBuilder newTarget) {
 		final Node oldTerminator = removeTerminator();
-		oldTerminator.getInput(PortId.arg(0)).unlink();
-		oldTerminator.getInput(PortId.arg(1)).unlink();
 		jump(newTarget);
 		for (final Entry<PortId, ? extends InputPort> entry : oldTerminator.getAllInputPorts().entrySet()) {
 			if (entry.getKey().type == PortType.LOCAL || entry.getKey().type == PortType.STACK) {
@@ -351,10 +350,14 @@ public class BasicBlockBuilder {
 				if (newTarget.inputNode.getOutput(entry.getKey()) != null) {
 					this.terminator.addInput(entry.getKey(), oldLink);
 				}
-			} else {
+			} else if (entry.getKey().type == PortType.ARG) {
+				entry.getValue().unlink();
+			} else if (entry.getKey().type == PortType.ENV) {
 				if (entry.getValue().getSource() != null) {
-					throw new IllegalStateException("Invalid linked port: " + entry.getKey());
+					throw new IllegalStateException();
 				}
+			} else {
+				throw new IllegalStateException();
 			}
 		}
 	}

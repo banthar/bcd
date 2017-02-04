@@ -184,6 +184,17 @@ public class BlockTransformations {
 				block.simplifyJump(block.getTarget(n));
 				blocksRemoved = true;
 			}
+		} else if (node.getData() instanceof JumpTable) {
+			if (block.terminator != node) {
+				throw new IllegalStateException();
+			}
+			final JumpTable jump = (JumpTable) node.getData();
+			final Object index = getConstantPortValue(node, 0);
+			if (index != null) {
+				final int n = jump.compute(index);
+				block.simplifyJump(block.getTarget(n));
+				blocksRemoved = true;
+			}
 		} else if (constantInput && node.getData() instanceof PureOperation
 				&& !(node.getData() instanceof LoadConstantOperation)) {
 			final List<Object> values = new ArrayList<>();

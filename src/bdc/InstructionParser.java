@@ -467,15 +467,16 @@ public class InstructionParser {
 							throw new ClassFormatException("non-zero padding byte");
 						}
 					}
-					final int defaultOffset = in.getInt() + opcodeOffset;
+					final BasicBlockBuilder defaultTarget = getBlock.apply(in.getInt() + opcodeOffset);
 					final int low = in.getInt();
 					final int high = in.getInt();
-					final Map<Integer, BasicBlockBuilder> lookupTable = new HashMap<>();
+					final Map<Integer, Integer> lookupTable = new HashMap<>();
+					final List<BasicBlockBuilder> targets = new ArrayList<>();
 					for (int i = low; i <= high; i++) {
 						final int offset = in.getInt() + opcodeOffset;
-						lookupTable.put(i, getBlock.apply(offset));
+						lookupTable.put(i, addJumpTarget(targets, getBlock.apply(offset)));
 					}
-					block.jumpTable(block.pop(), defaultOffset, lookupTable);
+					block.jumpTable(block.pop(), addJumpTarget(targets, defaultTarget), lookupTable, targets);
 					break;
 				}
 				case 0xab: {
@@ -484,15 +485,17 @@ public class InstructionParser {
 							throw new ClassFormatException("non-zero padding byte");
 						}
 					}
-					final int defaultOffset = in.getInt() + opcodeOffset;
+					final BasicBlockBuilder defaultTarget = getBlock.apply(in.getInt() + opcodeOffset);
 					final int n = in.getInt();
-					final Map<Integer, BasicBlockBuilder> lookupTable = new HashMap<>();
+					final Map<Integer, Integer> lookupTable = new HashMap<>();
+					final List<BasicBlockBuilder> targets = new ArrayList<>();
 					for (int i = 0; i < n; i++) {
 						final int match = in.getInt();
 						final int offset = in.getInt() + opcodeOffset;
-						lookupTable.put(match, getBlock.apply(offset));
+						lookupTable.put(match, targets.size());
+						lookupTable.put(i, addJumpTarget(targets, getBlock.apply(offset)));
 					}
-					block.jumpTable(block.pop(), defaultOffset, lookupTable);
+					block.jumpTable(block.pop(), addJumpTarget(targets, defaultTarget), lookupTable, targets);
 					break;
 				}
 				case 0xac:
@@ -646,6 +649,16 @@ public class InstructionParser {
 			}
 		}
 		return getBlock.apply(0);
+	}
+
+	private static int addJumpTarget(final List<BasicBlockBuilder> targets, final BasicBlockBuilder target) {
+		final int index = targets.indexOf(target);
+		if (index != -1) {
+			return index;
+		} else {
+			targets.add(target);
+			return targets.size() - 1;
+		}
 	}
 
 	private static List<OutputPort> readMethodArguments(final MethodType methodType, final BasicBlockBuilder stack) {

@@ -113,10 +113,10 @@ public class Method {
 
 	public void assertReturnsConstant(final Object expectedValue) {
 		if (this.block.terminator.getType() != NodeType.TERMINATOR) {
-			throw new AssertionError("Expected straight return not: " + this.block.terminator);
+			throw new AssertionError("Invalid terminator: " + this.block.terminator);
 		}
 		if (!this.block.jumpsOut.isEmpty()) {
-			throw new AssertionError("Expected no out blocks");
+			throw new AssertionError("Expected straight return not: " + this.block.terminator);
 		}
 		if (this.block.terminator.getAllInputPorts().size() != 2) {
 			throw new IllegalStateException("Terminator node should have exactly one input: " + this.block.terminator
