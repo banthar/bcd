@@ -103,7 +103,79 @@ public class ConstantPropagationTest {
 	}
 
 	@MethodReturnsConstant
-	public static boolean simplify_comparison() {
-		return 1 > 0;
+	public static int remove_local_used_in_dead_right_branch() {
+		int a;
+		int b;
+		int c;
+		a = 0;
+		b = 1;
+		c = 1;
+		return a == 0 ? a : b;
+	}
+
+	@MethodReturnsConstant
+	public static int remove_multiple_branches() {
+		int a;
+		int b;
+		int c;
+		a = 0;
+		b = 1;
+		c = 2;
+		return a == 0 ? b == 1 ? c == 1 ? a : b == 2 ? b : c : a : b;
+	}
+
+	@MethodReturnsConstant
+	public static int remove_local_used_in_dead_left_branch() {
+		int a;
+		int b;
+		int c;
+		a = 0;
+		b = 1;
+		c = 1;
+		return a == 1 ? a : b;
+	}
+
+	@MethodReturnsConstant
+	public static boolean remove_eq_else_block() {
+		int a;
+		a = 0;
+		if (a == 0) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	@MethodReturnsConstant
+	public static boolean remove_eq_then_block() {
+		int a;
+		a = 1;
+		if (a == 0) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	@MethodReturnsConstant
+	public static boolean remove_ne_else_block() {
+		int a;
+		a = 1;
+		if (a != 0) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	@MethodReturnsConstant
+	public static boolean remove_ne_then_block() {
+		int a;
+		a = 0;
+		if (a != 0) {
+			return true;
+		} else {
+			return false;
+		}
 	}
 }

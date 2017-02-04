@@ -106,7 +106,7 @@ public class BlockTransformations {
 		int newStackArgs = stackArgs;
 		final Map<Integer, OutputPort> newLocals = new HashMap<>(locals);
 
-		if (node.getType() == NodeType.BRANCH) {
+		if (node.getType() == NodeType.TERMINATOR && !block.jumpsOut.isEmpty()) {
 			int i = 0;
 			Chain<OutputPort> frame = stack;
 			while (frame != null) {
@@ -156,19 +156,35 @@ public class BlockTransformations {
 		}
 	}
 
-	public static void propagateConstants(final BasicBlockBuilder block) {
-		propagateConstants(block.terminator);
+	public static boolean propagateConstants(final BasicBlockBuilder block) {
+		return propagateConstants(block, block.terminator);
 	}
 
-	private static void propagateConstants(final Node node) {
+	private static boolean propagateConstants(final BasicBlockBuilder block, final Node node) {
+		boolean blocksRemoved = false;
 		boolean constantInput = true;
 		for (final Entry<PortId, ? extends InputPort> port : node.getAllInputPorts().entrySet()) {
-			propagateConstants(port.getValue().getSource().getNode());
+			blocksRemoved |= propagateConstants(block, port.getValue().getSource().getNode());
 			if (!(port.getValue().getSource().getNode().getData() instanceof LoadConstantOperation)) {
 				constantInput = false;
 			}
 		}
-		if (constantInput && node.getData() instanceof PureOperation
+		if (node.getData() instanceof ConditionalJump) {
+			if (block.terminator != node) {
+				throw new IllegalStateException();
+			}
+			if (block.jumpsOut.size() != 2) {
+				throw new IllegalStateException();
+			}
+			final ConditionalJump jump = (ConditionalJump) node.getData();
+			final Object left = getConstantPortValue(node, 0);
+			final Object right = getConstantPortValue(node, 1);
+			if (left != null && right != null) {
+				final int n = jump.compute(left, right);
+				block.simplifyJump(block.getTarget(n));
+				blocksRemoved = true;
+			}
+		} else if (constantInput && node.getData() instanceof PureOperation
 				&& !(node.getData() instanceof LoadConstantOperation)) {
 			final List<Object> values = new ArrayList<>();
 			final PureOperation operation = (PureOperation) node.getData();
@@ -179,6 +195,26 @@ public class BlockTransformations {
 			}
 			node.getOutput(PortId.arg(0))
 					.replaceWith(Node.constant(operation.getReturnType(), operation.compute(values)));
+		}
+		return blocksRemoved;
+	}
+
+	private static Object getConstantPortValue(final Node node, final int argId) {
+		final Object data = node.getInput(PortId.arg(argId)).getSource().getNode().getData();
+		if (data instanceof LoadConstantOperation) {
+			return ((LoadConstantOperation) data).getValue();
+		} else {
+			return null;
+		}
+	}
+
+	public static void removeDeadBlocks(final BasicBlockBuilder initBlock) {
+		for (final BasicBlockBuilder block : initBlock.getAllLinkedBlocks()) {
+			if (block != initBlock) {
+				if (block.jumpsIn.isEmpty()) {
+					block.unlink();
+				}
+			}
 		}
 	}
 }

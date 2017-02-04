@@ -1,5 +1,7 @@
 package bdc;
 
+import java.io.File;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,6 +16,7 @@ import bdc.ConstantPool.ClassReference;
 import bdc.ConstantPool.FieldReference;
 import bdc.ConstantPool.MethodReference;
 import bdc.Node.NodeType;
+import bdc.PortId.PortType;
 import bdc.Type.MethodType;
 import bdc.Type.PrimitiveType;
 
@@ -71,8 +74,8 @@ public class BasicBlockBuilder {
 
 	final Node inputNode = new Node(Arrays.asList(this), NodeType.INIT, true, 0, null);
 	private OutputPort environment = this.inputNode.getOutputEnvironment();
-	TerminatorNode terminator = null;
-	Set<BasicBlockBuilder> jumpsOut = new HashSet<>();
+	Node terminator = null;
+	List<BasicBlockBuilder> jumpsOut = new ArrayList<>();
 	Set<BasicBlockBuilder> jumpsIn = new HashSet<>();
 
 	private static int nextId = 0;
@@ -287,35 +290,13 @@ public class BasicBlockBuilder {
 		return operation.getOutputArg(0);
 	}
 
-	class ReturnValue extends TerminatorNode {
-
-		public ReturnValue(final OutputPort state) {
-			super(Arrays.asList("return_void"), NodeType.RETURN, state);
-		}
-
-		public ReturnValue(final OutputPort state, final PrimitiveType type, final OutputPort ref) {
-			super(Arrays.asList("return_value", type), NodeType.RETURN, state, ref);
-		}
-
-		public ReturnValue(final OutputPort state, final OutputPort exception) {
-			super(Arrays.asList("return_error"), NodeType.RETURN, state, exception);
-		}
-
-	}
-
 	public void returnValue(final PrimitiveType type, final OutputPort ref) {
-		terminate(new ReturnValue(this.environment, type, ref));
+		terminate(Node.terminator(Arrays.asList("return_value", type), this.environment, ref));
+
 	}
 
 	public void returnVoid() {
-		terminate(new ReturnValue(this.environment));
-	}
-
-	class JumpIf extends TerminatorNode {
-		public JumpIf(final OutputPort state, final PrimitiveType type, final OutputPort left,
-				final CompareType compareType, final OutputPort right) {
-			super(Arrays.asList("jump_if", type, compareType), NodeType.BRANCH, state, left, right);
-		}
+		terminate(Node.terminator(Arrays.asList("return_void"), this.environment));
 	}
 
 	private void referenceTo(final BasicBlockBuilder target) {
@@ -325,9 +306,8 @@ public class BasicBlockBuilder {
 
 	public void jumpIf(final PrimitiveType type, final BasicBlockBuilder then, final BasicBlockBuilder otherwise,
 			final CompareType compareType, final OutputPort left, final OutputPort right) {
-		referenceTo(then);
-		referenceTo(otherwise);
-		terminate(new JumpIf(this.environment, type, left, compareType, right));
+		terminate(new Node(new ConditionalJump(type, compareType), NodeType.TERMINATOR, false, 0, this.environment,
+				left, right), then, otherwise);
 	}
 
 	public void jumpTable(final OutputPort value, final int defaultOffset,
@@ -335,30 +315,62 @@ public class BasicBlockBuilder {
 		for (final BasicBlockBuilder target : table.values()) {
 			referenceTo(target);
 		}
-		terminate(new Jump(this.environment));
-	}
-
-	class Jump extends TerminatorNode {
-		public Jump(final OutputPort state) {
-			super(Arrays.asList("jump"), NodeType.BRANCH, state);
-		}
+		terminate(Node.terminator(Arrays.asList("jump_table", defaultOffset), this.environment, value));
 	}
 
 	public void jump(final BasicBlockBuilder target) {
-		referenceTo(target);
-		terminate(new Jump(this.environment));
+		terminate(Node.terminator(Arrays.asList("jump"), this.environment), target);
 	}
 
 	public void returnError(final OutputPort exception) {
-		terminate(new ReturnValue(this.environment, exception));
+		terminate(Node.terminator(this.environment, exception));
 	}
 
-	private void terminate(final TerminatorNode terminator) {
+	private void terminate(final Node terminator, final BasicBlockBuilder... targets) {
+		if (!this.jumpsOut.isEmpty()) {
+			throw new IllegalStateException();
+		}
 		if (this.terminator != null || this.environment == null) {
 			throw new IllegalStateException();
 		}
+		for (final BasicBlockBuilder target : targets) {
+			referenceTo(target);
+		}
 		this.terminator = terminator;
 		this.environment = null;
+	}
+
+	public void simplifyJump(final BasicBlockBuilder newTarget) {
+		final Node oldTerminator = removeTerminator();
+		oldTerminator.getInput(PortId.arg(0)).unlink();
+		oldTerminator.getInput(PortId.arg(1)).unlink();
+		jump(newTarget);
+		for (final Entry<PortId, ? extends InputPort> entry : oldTerminator.getAllInputPorts().entrySet()) {
+			if (entry.getKey().type == PortType.LOCAL || entry.getKey().type == PortType.STACK) {
+				final OutputPort oldLink = entry.getValue().unlink();
+				if (newTarget.inputNode.getOutput(entry.getKey()) != null) {
+					this.terminator.addInput(entry.getKey(), oldLink);
+				}
+			} else {
+				if (entry.getValue().getSource() != null) {
+					throw new IllegalStateException("Invalid linked port: " + entry.getKey());
+				}
+			}
+		}
+	}
+
+	private Node removeTerminator() {
+		if (this.terminator == null || this.environment != null) {
+			throw new IllegalStateException();
+		}
+		for (final BasicBlockBuilder target : this.jumpsOut) {
+			target.jumpsIn.remove(this);
+		}
+		this.jumpsOut.clear();
+		final Node removedTerminator = this.terminator;
+		this.terminator = null;
+		this.environment = removedTerminator.getInput(PortId.environment()).unlink();
+		return removedTerminator;
 	}
 
 	public boolean isTerminated() {
@@ -379,8 +391,27 @@ public class BasicBlockBuilder {
 		}
 	}
 
+	public Set<BasicBlockBuilder> getAllLinkedBlocks() {
+		final Set<BasicBlockBuilder> visited = new HashSet<>(Arrays.asList(this));
+		getAllLinkedBlocks(visited);
+		return visited;
+	}
+
+	private void getAllLinkedBlocks(final Set<BasicBlockBuilder> visited) {
+		for (final BasicBlockBuilder out : this.jumpsOut) {
+			if (visited.add(out)) {
+				out.getAllLinkedBlocks(visited);
+			}
+		}
+		for (final BasicBlockBuilder out : this.jumpsIn) {
+			if (visited.add(out)) {
+				out.getAllLinkedBlocks(visited);
+			}
+		}
+	}
+
 	public void dump(final PrintStream out, final String name) {
-		for (final BasicBlockBuilder block : getAllTargetBlocks()) {
+		for (final BasicBlockBuilder block : getAllLinkedBlocks()) {
 			out.println("    subgraph cluster_" + block.getBlockId() + " {");
 			out.println("      label=\"" + block.getBlockId() + "\";");
 			out.print("      " + quote(block.inputNode.getNodeId()) + " [");
@@ -424,17 +455,30 @@ public class BasicBlockBuilder {
 			out.println("    }");
 
 		}
-		for (final BasicBlockBuilder source : getAllTargetBlocks()) {
+		for (final BasicBlockBuilder source : getAllLinkedBlocks()) {
 			for (final BasicBlockBuilder target : source.jumpsOut) {
-				out.println("    " + source.terminator.getId() + ":out -> " + target.inputNode.getNodeId() + ":in;");
+				out.println(
+						"    " + source.terminator.getNodeId() + ":out -> " + target.inputNode.getNodeId() + ":in;");
 			}
-			if (source.terminator instanceof ReturnValue) {
-				out.println("    " + source.terminator.getId() + ":out -> " + name + "_end;");
+			if (source.terminator.getData() == "return_value") {
+				out.println("    " + source.terminator.getNodeId() + ":out -> " + name + "_end;");
 
 			}
 		}
 		out.println("    " + name + "_start -> " + this.inputNode.getNodeId() + ":in;");
 
+	}
+
+	public void dump(final String name) {
+		try {
+			try (final PrintStream out = new PrintStream(new File(name + ".dot"))) {
+				out.println("digraph G {");
+				dump(out, name);
+				out.println("}");
+			}
+		} catch (final IOException e) {
+			throw new IllegalStateException(e);
+		}
 	}
 
 	private String getBlockId() {
@@ -457,4 +501,16 @@ public class BasicBlockBuilder {
 	static String getObjectId(final Object o) {
 		return String.format("%08x", o.hashCode());
 	}
+
+	public BasicBlockBuilder getTarget(final int n) {
+		return this.jumpsOut.get(n);
+	}
+
+	public void unlink() {
+		if (!this.jumpsIn.isEmpty()) {
+			throw new IllegalStateException();
+		}
+		removeTerminator();
+	}
+
 }

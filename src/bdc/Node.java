@@ -54,9 +54,7 @@ class Node implements InputNode, OutputNode {
 
 		ARRAY_LENGTH,
 
-		BRANCH,
-
-		RETURN,
+		TERMINATOR,
 
 	}
 
@@ -232,5 +230,9 @@ class Node implements InputNode, OutputNode {
 
 	public static OutputPort constant(final Type type, final Object value) {
 		return pureOperation(new LoadConstantOperation(type, value));
+	}
+
+	public static Node terminator(final Object data, final OutputPort environment, final OutputPort... input) {
+		return new Node(data, NodeType.TERMINATOR, false, 0, environment, input);
 	}
 }

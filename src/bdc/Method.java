@@ -63,9 +63,11 @@ public class Method {
 		if (dataInput.read() != -1) {
 			throw new ClassFormatException("Extra bytes at end of method code");
 		}
-		BlockTransformations.removeDirectJumps(block);
-		BlockTransformations.removeDirectStackWrites(block);
-		BlockTransformations.propagateConstants(block);
+		do {
+			BlockTransformations.removeDeadBlocks(block);
+			BlockTransformations.removeDirectJumps(block);
+			BlockTransformations.removeDirectStackWrites(block);
+		} while (BlockTransformations.propagateConstants(block));
 		this.block = block;
 		resolve();
 	}
@@ -110,11 +112,15 @@ public class Method {
 	}
 
 	public void assertReturnsConstant(final Object expectedValue) {
-		if (this.block.terminator.getType() != NodeType.RETURN) {
+		if (this.block.terminator.getType() != NodeType.TERMINATOR) {
 			throw new AssertionError("Expected straight return not: " + this.block.terminator);
 		}
+		if (!this.block.jumpsOut.isEmpty()) {
+			throw new AssertionError("Expected no out blocks");
+		}
 		if (this.block.terminator.getAllInputPorts().size() != 2) {
-			throw new IllegalStateException();
+			throw new IllegalStateException("Terminator node should have exactly one input: " + this.block.terminator
+					+ ": " + this.block.terminator.getAllInputPorts());
 		}
 
 		final Node environmentSource = this.block.terminator.getInput(PortId.environment()).getSource().getNode();

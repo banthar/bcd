@@ -10,16 +10,19 @@ import java.util.List;
 
 import org.junit.runner.Description;
 import org.junit.runner.Runner;
+import org.junit.runner.manipulation.Filter;
+import org.junit.runner.manipulation.Filterable;
+import org.junit.runner.manipulation.NoTestsRemainException;
 import org.junit.runner.notification.Failure;
 import org.junit.runner.notification.RunNotifier;
 
 import bdc.Type;
 import bdc.URLClassParser;
 
-public class BdcRunner extends Runner {
+public class BdcRunner extends Runner implements Filterable {
 
 	private final Class<?> testClass;
-	private final List<Method> tests;
+	private List<Method> tests;
 
 	public BdcRunner(final Class<?> testClass) {
 		this.testClass = testClass;
@@ -73,6 +76,17 @@ public class BdcRunner extends Runner {
 			}
 			throw e;
 		}
+	}
+
+	@Override
+	public void filter(final Filter filter) throws NoTestsRemainException {
+		final List<Method> filteredTests = new ArrayList<>();
+		for (final Method m : this.tests) {
+			if (filter.shouldRun(Description.createTestDescription(this.testClass, m.getName()))) {
+				filteredTests.add(m);
+			}
+		}
+		this.tests = filteredTests;
 	}
 
 	private class TestMethod {
