@@ -106,10 +106,8 @@ public class ConstantPropagationTest {
 	public static int remove_local_used_in_dead_right_branch() {
 		int a;
 		int b;
-		int c;
 		a = 0;
 		b = 1;
-		c = 1;
 		return a == 0 ? a : b;
 	}
 
