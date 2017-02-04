@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -152,6 +153,32 @@ public class BlockTransformations {
 		}
 		for (final InputPort port : targets) {
 			removePush(block, port.getNode(), newStack, newStackArgs, newLocals);
+		}
+	}
+
+	public static void propagateConstants(final BasicBlockBuilder block) {
+		propagateConstants(block.terminator);
+	}
+
+	private static void propagateConstants(final Node node) {
+		boolean constantInput = true;
+		for (final Entry<PortId, ? extends InputPort> port : node.getAllInputPorts().entrySet()) {
+			propagateConstants(port.getValue().getSource().getNode());
+			if (!(port.getValue().getSource().getNode().getData() instanceof LoadConstantOperation)) {
+				constantInput = false;
+			}
+		}
+		if (constantInput && node.getData() instanceof PureOperation
+				&& !(node.getData() instanceof LoadConstantOperation)) {
+			final List<Object> values = new ArrayList<>();
+			final PureOperation operation = (PureOperation) node.getData();
+			for (int i = 0; i < operation.getInputPorts(); i++) {
+				final LoadConstantOperation argValue = (LoadConstantOperation) node.getInput(PortId.arg(i)).getSource()
+						.getNode().data;
+				values.add(argValue.getValue());
+			}
+			node.getOutput(PortId.arg(0))
+					.replaceWith(Node.constant(operation.getReturnType(), operation.compute(values)));
 		}
 	}
 }

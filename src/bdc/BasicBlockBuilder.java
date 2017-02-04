@@ -101,58 +101,63 @@ public class BasicBlockBuilder {
 				.getOutputEnvironment();
 	}
 
+	private OutputPort constant(final Type type, final Object value) {
+		return Node.constant(type, value);
+	}
+
 	public OutputPort nullConstant() {
-		return new Constant(PrimitiveType.Reference, null).getOutputArg(0);
+		return constant(PrimitiveType.Reference, null);
 	}
 
 	public OutputPort integerConstant(final int value) {
-		return new Constant(PrimitiveType.Integer, value).getOutputArg(0);
+		return constant(PrimitiveType.Integer, value);
 	}
 
 	public OutputPort longConstant(final long value) {
-		return new Constant(PrimitiveType.Long, value).getOutputArg(0);
+		return constant(PrimitiveType.Long, value);
 	}
 
 	public OutputPort floatConstant(final float value) {
-		return new Constant(PrimitiveType.Float, value).getOutputArg(0);
+		return constant(PrimitiveType.Float, value);
 	}
 
 	public OutputPort doubleConstant(final double value) {
-		return new Constant(PrimitiveType.Double, value).getOutputArg(0);
+		return constant(PrimitiveType.Double, value);
 	}
 
 	public OutputPort stringConstant(final String value) {
-		return new Constant(Type.string(), value).getOutputArg(0);
+		return constant(Type.string(), value);
+	}
+
+	private OutputPort pureOperation(final PureOperation operation, final OutputPort... args) {
+		return Node.pureOperation(operation, args);
 	}
 
 	public OutputPort binaryOperation(final PrimitiveType type, final BinaryOperationType op, final OutputPort left,
 			final OutputPort right) {
-		return new Node(Arrays.asList("binary_operation", type, op), NodeType.BINARY_OPERATION, false, 1, null, left,
-				right).getOutputArg(0);
+		return pureOperation(PureOperation.binaryOperation(type, op), left, right);
 	}
 
 	public OutputPort negate(final PrimitiveType type, final OutputPort value) {
-		return new Node(Arrays.asList("negate", type), NodeType.NEGATE, false, 1, null, value).getOutputArg(0);
+		return pureOperation(PureOperation.negate(type), value);
 	}
 
 	public OutputPort shift(final PrimitiveType type, final ShiftType shiftType, final OutputPort left,
 			final OutputPort right) {
-		return new Node(Arrays.asList("shift", type, shiftType), NodeType.SHIFT, false, 1, null, left, right)
-				.getOutputArg(0);
+		return pureOperation(PureOperation.shift(type, shiftType), left, right);
 	}
 
 	public OutputPort bitwiseOperation(final PrimitiveType type, final BitwiseOperationType operation,
 			final OutputPort left, final OutputPort right) {
-		return new Node(Arrays.asList("bitwise_operation", type, operation), NodeType.BITWISE_OPERATION, false, 1, null,
-				left, right).getOutputArg(0);
+		return pureOperation(PureOperation.bitwiseOperation(type, operation), left, right);
 	}
 
 	public OutputPort convert(final PrimitiveType from, final PrimitiveType to, final OutputPort value) {
-		return new Node(Arrays.asList("convert", from, to), NodeType.CONVERT, false, 1, null, value).getOutputArg(0);
+		return pureOperation(PureOperation.convert(from, to), value);
 	}
 
 	public OutputPort compare(final PrimitiveType type, final OutputPort left, final OutputPort right) {
-		return new Node(Arrays.asList("compare", type), NodeType.COMPARE, false, 1, null, left, right).getOutputArg(0);
+		return pureOperation(PureOperation.compare(type), left, right);
 	}
 
 	public OutputPort loadElement(final PrimitiveType elementType, final OutputPort arrayref, final OutputPort index) {

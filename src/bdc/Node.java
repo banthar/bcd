@@ -36,17 +36,7 @@ class Node implements InputNode, OutputNode {
 
 		MONITOR_EXIT,
 
-		COMPARE,
-
-		CONVERT,
-
-		BINARY_OPERATION,
-
-		NEGATE,
-
-		SHIFT,
-
-		BITWISE_OPERATION,
+		PURE_OPERATION,
 
 		LOAD_STATIC_FIELD,
 
@@ -229,10 +219,18 @@ class Node implements InputNode, OutputNode {
 
 	@Override
 	public String toString() {
-		return getNodeId() + "{" + getType() + "}";
+		return "Node(" + getNodeId() + ", " + getType() + ", " + getData() + ")";
 	}
 
 	public Object getData() {
 		return this.data;
+	}
+
+	public static OutputPort pureOperation(final PureOperation operation, final OutputPort... args) {
+		return new Node(operation, NodeType.PURE_OPERATION, false, 1, null, args).getOutputArg(0);
+	}
+
+	public static OutputPort constant(final Type type, final Object value) {
+		return pureOperation(new LoadConstantOperation(type, value));
 	}
 }

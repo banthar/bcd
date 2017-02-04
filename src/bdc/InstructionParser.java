@@ -78,8 +78,8 @@ public class InstructionParser {
 			final int name_index = dataInput.readUnsignedShort();
 			final int descriptor_index = dataInput.readUnsignedShort();
 			final int index = dataInput.readUnsignedShort();
-			System.out.println(Arrays.asList(startPc, length, constantPool.getUTF8(name_index),
-					constantPool.getDescriptor(descriptor_index), index));
+			Arrays.asList(startPc, length, constantPool.getUTF8(name_index),
+					constantPool.getDescriptor(descriptor_index), index);
 		}
 	}
 
@@ -92,8 +92,8 @@ public class InstructionParser {
 			final int name_index = dataInput.readUnsignedShort();
 			final int signature_index = dataInput.readUnsignedShort();
 			final int index = dataInput.readUnsignedShort();
-			System.out.println(Arrays.asList(startPc, length, constantPool.getUTF8(name_index),
-					constantPool.getSignature(signature_index), index));
+			Arrays.asList(startPc, length, constantPool.getUTF8(name_index), constantPool.getSignature(signature_index),
+					index);
 		}
 	}
 

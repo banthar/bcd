@@ -63,6 +63,7 @@ public class Method {
 		}
 		BlockTransformations.removeDirectJumps(block);
 		BlockTransformations.removeDirectStackWrites(block);
+		BlockTransformations.propagateConstants(block);
 		this.block = block;
 		resolve();
 	}
