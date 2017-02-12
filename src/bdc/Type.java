@@ -407,8 +407,11 @@ public interface Type {
 		if (type.isPrimitive()) {
 			return PrimitiveType.fromJavaType(type);
 		} else {
-			throw new IllegalStateException("Unknown java type: " + type);
-
+			return ReferenceType.fromClassName(getRuntimeClassName(type));
 		}
+	}
+
+	static String getRuntimeClassName(final java.lang.Class<?> type) {
+		return type.getName().replace('.', '/');
 	}
 }

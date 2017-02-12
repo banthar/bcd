@@ -130,7 +130,7 @@ public class Method {
 		final Node sourceNode = this.block.terminator.getInput(PortId.arg(0)).getSource().getNode();
 		if (sourceNode.getData() instanceof LoadConstantOperation) {
 			final LoadConstantOperation data = (LoadConstantOperation) sourceNode.getData();
-			if (data.getType() != PrimitiveType.Integer) {
+			if (data.getType() != getExpectedType(expectedValue)) {
 				throw new IllegalStateException();
 			}
 			final Object actualValue = data.getValue();
@@ -141,6 +141,18 @@ public class Method {
 			throw new IllegalStateException();
 		}
 
+	}
+
+	private Type getExpectedType(final Object expectedValue) {
+		if (expectedValue instanceof Integer) {
+			return PrimitiveType.Integer;
+		} else if (expectedValue instanceof Boolean) {
+			return PrimitiveType.Integer;
+		} else if (expectedValue == null) {
+			return PrimitiveType.Reference;
+		} else {
+			throw new IllegalStateException("Unknown type: " + expectedValue);
+		}
 	}
 
 	private String toString(final Object value) {

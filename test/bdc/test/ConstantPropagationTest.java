@@ -276,4 +276,20 @@ public class ConstantPropagationTest {
 		}
 		return 3;
 	}
+
+	@MethodReturnsConstant
+	public static Object return_null() {
+		return null;
+	}
+
+	@MethodReturnsConstant
+	public static Object inline_null_across_branches() {
+		int a;
+		a = 0;
+		if (a == 0) {
+			return null;
+		} else {
+			return new Object();
+		}
+	}
 }
