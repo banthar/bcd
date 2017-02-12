@@ -72,6 +72,9 @@ public class BdcRunner extends Runner implements Filterable {
 			try (final PrintStream out = new PrintStream(new File(name + ".dot"))) {
 				out.println("digraph G {");
 				m.dump(out);
+				for (final bdc.Method target : m.getTargetMethods()) {
+					target.dump(out);
+				}
 				out.println("}");
 			}
 			throw e;
@@ -87,19 +90,8 @@ public class BdcRunner extends Runner implements Filterable {
 			}
 		}
 		this.tests = filteredTests;
-	}
-
-	private class TestMethod {
-		private final String name;
-		private final int expectedValue;
-
-		public TestMethod(final String name, final int expectedValue) {
-			this.name = name;
-			this.expectedValue = expectedValue;
-		}
-
-		public String getName() {
-			return this.name;
+		if (this.tests.isEmpty()) {
+			throw new NoTestsRemainException();
 		}
 	}
 }

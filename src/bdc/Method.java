@@ -4,7 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -26,6 +26,7 @@ public class Method {
 	private final List<ClassReference> exceptions;
 	private final String signature;
 	private BasicBlockBuilder block;
+	private final List<Node> callers = new ArrayList<>();
 
 	public Method(final URLClassParser bytecodeLoader, final ConstantPool constantPool, final ClassReference selfType,
 			final int accessFlags, final String name, final String descriptor, final byte[] code,
@@ -75,12 +76,14 @@ public class Method {
 	public void resolve() throws IOException, ClassFormatException {
 		for (final BasicBlockBuilder block : this.block.getAllTargetBlocks()) {
 			for (final Node node : block.inputNode.getAllLinkedNodes()) {
-				if (node.getType() == NodeType.INVOKE) {
+				if (node.getData() instanceof MethodReference) {
 					final MethodReference reference = (MethodReference) node.getData();
 					try {
 						final Method method = this.bytecodeLoader.loadClass(reference.getOwnerClass().getName())
 								.getMethod(reference.getName(), reference.getDescriptor());
 						method.parse();
+						node.data = method;
+						method.callers.add(node);
 					} catch (final ClassNotFoundException | NoSuchMethodException e) {
 						System.err.println(e);
 					}
@@ -104,11 +107,23 @@ public class Method {
 		return this.block;
 	}
 
+	public List<Method> getTargetMethods() {
+		final List<Method> targets = new ArrayList<>();
+		for (final Node node : this.block.terminator.getAllLinkedNodes()) {
+			if (node.getData() instanceof Method) {
+				targets.add((Method) node.getData());
+			}
+			if (node.getData() instanceof MethodReference) {
+				throw new IllegalStateException();
+			}
+		}
+		return targets;
+	}
+
 	@Override
 	public String toString() {
 		return "Method [accessFlags=" + this.accessFlags + ", name=" + this.name + ", descriptor=" + this.descriptor
-				+ ", code=" + Arrays.toString(this.code) + ", exceptions=" + this.exceptions + ", signature="
-				+ this.signature + "]";
+				+ ", code=" + this.code + ", exceptions=" + this.exceptions + ", signature=" + this.signature + "]";
 	}
 
 	public void assertReturnsConstant(final Object expectedValue) {

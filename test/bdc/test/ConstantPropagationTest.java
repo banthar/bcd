@@ -292,4 +292,14 @@ public class ConstantPropagationTest {
 			return new Object();
 		}
 	}
+
+	private static int max(final int a, final int b) {
+		return a > b ? a : b;
+	}
+
+	@MethodReturnsConstant
+	public static int inline_pure_function() {
+		return max(0, 1);
+	}
+
 }
