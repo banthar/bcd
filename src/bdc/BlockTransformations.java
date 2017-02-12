@@ -1,6 +1,7 @@
 package bdc;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -227,5 +228,52 @@ public class BlockTransformations {
 				}
 			}
 		}
+	}
+
+	public static Map<PortId, PortId> getConstantOutputs(final BasicBlockBuilder init) {
+		final Map<PortId, PortId> portsToInline = new HashMap<>();
+		for (final PortId portId : Arrays.asList(PortId.environment(), PortId.arg(0))) {
+			final List<Node> terminators = new ArrayList<>();
+			OutputPort commonSource = null;
+			for (final BasicBlockBuilder block : init.getAllLinkedBlocks()) {
+				if (block.terminator.getData() instanceof FunctionTerminator) {
+					final Node terminatorNode = block.terminator;
+					final OutputPort source = getSource(terminatorNode, portId);
+					if (commonSource == null || isEqual(commonSource, source)) {
+						commonSource = source;
+						terminators.add(terminatorNode);
+					} else {
+						commonSource = null;
+						break;
+					}
+				}
+			}
+			if (commonSource != null && commonSource.getNode() == init.inputNode) {
+				portsToInline.put(portId, calleToCallerPort(commonSource.getPortId()));
+				for (final Node terminator : terminators) {
+					terminator.removeInput(portId);
+				}
+			}
+		}
+		return portsToInline;
+	}
+
+	private static PortId calleToCallerPort(final PortId portId) {
+		switch (portId.type) {
+		case ENV:
+			return portId;
+		case LOCAL:
+			return PortId.arg(portId.index);
+		default:
+			throw new IllegalStateException("Invalid calee argument port: " + portId);
+		}
+	}
+
+	private static boolean isEqual(final OutputPort commonPort, final OutputPort source) {
+		return commonPort == source;
+	}
+
+	private static OutputPort getSource(final Node terminatorNode, final PortId portId) {
+		return terminatorNode.getInput(portId).getSource();
 	}
 }

@@ -5,8 +5,10 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 import bdc.ConstantPool.ClassReference;
 import bdc.ConstantPool.MethodReference;
@@ -107,8 +109,8 @@ public class Method {
 		return this.block;
 	}
 
-	public List<Method> getTargetMethods() {
-		final List<Method> targets = new ArrayList<>();
+	public Set<Method> getTargetMethods() {
+		final Set<Method> targets = new HashSet<>();
 		for (final Node node : this.block.terminator.getAllLinkedNodes()) {
 			if (node.getData() instanceof Method) {
 				targets.add((Method) node.getData());
@@ -153,7 +155,7 @@ public class Method {
 				throw new AssertionError("expected: " + toString(expectedValue) + " but was " + toString(actualValue));
 			}
 		} else {
-			throw new IllegalStateException();
+			throw new IllegalStateException("Expected constant node: " + sourceNode);
 		}
 
 	}
@@ -186,6 +188,10 @@ public class Method {
 			registerValue = expectedValue;
 		}
 		return Objects.equals(actualValue, registerValue);
+	}
+
+	public List<Node> getCallers() {
+		return this.callers;
 	}
 
 }

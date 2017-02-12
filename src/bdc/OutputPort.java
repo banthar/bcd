@@ -11,9 +11,12 @@ final class OutputPort {
 	private final int id;
 	final Set<InputPort> targets = new HashSet<>();
 
-	OutputPort(final Node node) {
+	final PortId portId;
+
+	OutputPort(final Node node, final PortId portId) {
 		this.node = node;
 		this.id = nextId++;
+		this.portId = portId;
 	}
 
 	public Node getNode() {
@@ -32,6 +35,10 @@ final class OutputPort {
 		for (final InputPort target : new ArrayList<>(this.targets)) {
 			target.link(source);
 		}
+	}
+
+	public PortId getPortId() {
+		return this.portId;
 	}
 
 	@Override

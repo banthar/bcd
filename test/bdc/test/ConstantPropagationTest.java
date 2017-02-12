@@ -93,6 +93,22 @@ public class ConstantPropagationTest {
 	}
 
 	@MethodReturnsConstant
+	public static Object inline_null_across_branches() {
+		int a;
+		a = 0;
+		if (a == 0) {
+			return null;
+		} else {
+			return new Object();
+		}
+	}
+
+	@MethodReturnsConstant
+	public static Object return_null() {
+		return null;
+	}
+
+	@MethodReturnsConstant
 	public static boolean return_true() {
 		return true;
 	}
@@ -276,30 +292,4 @@ public class ConstantPropagationTest {
 		}
 		return 3;
 	}
-
-	@MethodReturnsConstant
-	public static Object return_null() {
-		return null;
-	}
-
-	@MethodReturnsConstant
-	public static Object inline_null_across_branches() {
-		int a;
-		a = 0;
-		if (a == 0) {
-			return null;
-		} else {
-			return new Object();
-		}
-	}
-
-	private static int max(final int a, final int b) {
-		return a > b ? a : b;
-	}
-
-	@MethodReturnsConstant
-	public static int inline_pure_function() {
-		return max(0, 1);
-	}
-
 }

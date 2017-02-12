@@ -85,11 +85,10 @@ class Node implements InputNode, OutputNode {
 
 		this.output = new HashMap<>();
 		if (writesMemory) {
-			this.output.put(PortId.environment(), new OutputPort(this));
+			addOutput(PortId.environment());
 		}
 		for (int i = 0; i < outputs; i++) {
-			final OutputPort port = new OutputPort(this);
-			this.output.put(PortId.arg(i), port);
+			addOutput(PortId.arg(i));
 		}
 	}
 
@@ -185,6 +184,13 @@ class Node implements InputNode, OutputNode {
 		this.input.remove(port).unlink();
 	}
 
+	public void removeOutput(final PortId port) {
+		final OutputPort removed = this.output.remove(port);
+		if (!removed.getTargets().isEmpty()) {
+			throw new IllegalStateException("Removing used output ports: " + removed);
+		}
+	}
+
 	@Override
 	public OutputPort getOutputEnvironment() {
 		return this.output.get(PortId.environment());
@@ -198,9 +204,9 @@ class Node implements InputNode, OutputNode {
 		return this.output.get(id);
 	}
 
-	public OutputPort addOutput(final PortId id) {
-		final OutputPort newPort = new OutputPort(this);
-		if (this.output.put(id, newPort) != null) {
+	public OutputPort addOutput(final PortId portId) {
+		final OutputPort newPort = new OutputPort(this, portId);
+		if (this.output.put(portId, newPort) != null) {
 			throw new IllegalStateException();
 		}
 		return newPort;

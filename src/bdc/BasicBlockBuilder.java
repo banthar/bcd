@@ -291,12 +291,12 @@ public class BasicBlockBuilder {
 	}
 
 	public void returnValue(final PrimitiveType type, final OutputPort ref) {
-		terminate(Node.terminator(Arrays.asList("return_value", type), this.environment, ref));
+		terminate(Node.terminator(new ReturnValues(type), this.environment, ref));
 
 	}
 
 	public void returnVoid() {
-		terminate(Node.terminator(Arrays.asList("return_void"), this.environment));
+		terminate(Node.terminator(new ReturnValues(), this.environment));
 	}
 
 	private void referenceTo(final BasicBlockBuilder target) {
@@ -321,7 +321,7 @@ public class BasicBlockBuilder {
 	}
 
 	public void returnError(final OutputPort exception) {
-		terminate(Node.terminator(this.environment, exception));
+		terminate(Node.terminator(new ReturnError(), this.environment, exception));
 	}
 
 	private void terminate(final Node terminator, final BasicBlockBuilder... targets) {
@@ -426,7 +426,7 @@ public class BasicBlockBuilder {
 			}
 			out.println("}\"];");
 
-			for (final Node node : block.inputNode.getAllLinkedNodes()) {
+			for (final Node node : block.getNodes()) {
 				out.print("      \"" + node.getNodeId() + "\" [");
 				out.print("shape = \"record\" label = \"{");
 				out.print("{<in>in");
@@ -444,9 +444,7 @@ public class BasicBlockBuilder {
 				out.println("}}\"];");
 			}
 
-			final Set<Node> nodes = new HashSet<>(block.inputNode.getAllLinkedNodes());
-			nodes.add(block.inputNode);
-			for (final Node node : nodes) {
+			for (final Node node : block.getNodes()) {
 				for (final Entry<? extends PortId, ? extends OutputPort> entry : node.getAllOutputPorts().entrySet()) {
 					final OutputPort sourcePort = entry.getValue();
 					for (final InputPort targetPort : sourcePort.getTargets()) {
@@ -470,6 +468,13 @@ public class BasicBlockBuilder {
 		}
 		out.println("    " + name + "_start -> " + this.inputNode.getNodeId() + ":in;");
 
+	}
+
+	private Set<Node> getNodes() {
+		final HashSet<Node> nodes = new HashSet<>();
+		nodes.addAll(this.inputNode.getAllLinkedNodes());
+		nodes.addAll(this.terminator.getAllLinkedNodes());
+		return nodes;
 	}
 
 	public void dump(final String name) {

@@ -16,6 +16,7 @@ import org.junit.runner.manipulation.NoTestsRemainException;
 import org.junit.runner.notification.Failure;
 import org.junit.runner.notification.RunNotifier;
 
+import bdc.ProgramTransformations;
 import bdc.Type;
 import bdc.URLClassParser;
 
@@ -65,8 +66,9 @@ public class BdcRunner extends Runner implements Filterable {
 		final URLClassParser loader = new URLClassParser(new URL[] { this.testClass.getResource("/") });
 		final bdc.Class type = loader.loadClass(this.testClass.getName());
 		final bdc.Method m = type.getMethod(name, signature);
-		m.parse();
 		try {
+			m.parse();
+			ProgramTransformations.removeDirectlyReturnedValues(m);
 			m.assertReturnsConstant(expectedValue);
 		} catch (final Throwable e) {
 			try (final PrintStream out = new PrintStream(new File(name + ".dot"))) {
