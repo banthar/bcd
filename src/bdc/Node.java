@@ -9,70 +9,19 @@ import java.util.Set;
 
 class Node implements InputNode, OutputNode {
 
-	public enum NodeType {
-		INIT,
-
-		POP,
-
-		PUSH,
-
-		STORE_LOCAL,
-
-		LOAD_LOCAL,
-
-		CONSTANT,
-
-		INVOKE,
-
-		LOAD_ELEMENT,
-
-		STORE_ELEMENT,
-
-		CHECKED_CAST,
-
-		INSTANCE_OF,
-
-		MONITOR_ENTER,
-
-		MONITOR_EXIT,
-
-		PURE_OPERATION,
-
-		LOAD_STATIC_FIELD,
-
-		STORE_STATIC_FIELD,
-
-		LOAD_FIELD,
-
-		STORE_FIELD,
-
-		NEW_INSTANCE,
-
-		NEW_PRIMITIVE_ARRAY,
-
-		NEW_ARRAY,
-
-		ARRAY_LENGTH,
-
-		TERMINATOR,
-
-	}
-
 	static int nextId = 0;
 
 	private final int id = nextId++;
 
-	private final NodeType type;
 	Object data;
 
 	private final Map<PortId, InputPort> input;
 
 	private final Map<PortId, OutputPort> output;
 
-	public Node(final Object data, final NodeType type, final boolean writesMemory, final int outputs,
-			final OutputPort inputEnvironment, final List<? extends OutputPort> input) {
+	public Node(final Object data, final boolean writesMemory, final int outputs, final OutputPort inputEnvironment,
+			final List<? extends OutputPort> input) {
 		this.data = data;
-		this.type = type;
 
 		this.input = new HashMap<>();
 		if (inputEnvironment != null) {
@@ -92,13 +41,9 @@ class Node implements InputNode, OutputNode {
 		}
 	}
 
-	public Node(final Object data, final NodeType type, final boolean writesMemory, final int outputs,
-			final OutputPort inputEnvironment, final OutputPort... input) {
-		this(data, type, writesMemory, outputs, inputEnvironment, Arrays.asList(input));
-	}
-
-	public NodeType getType() {
-		return this.type;
+	public Node(final Object data, final boolean writesMemory, final int outputs, final OutputPort inputEnvironment,
+			final OutputPort... input) {
+		this(data, writesMemory, outputs, inputEnvironment, Arrays.asList(input));
 	}
 
 	@Override
@@ -223,7 +168,7 @@ class Node implements InputNode, OutputNode {
 
 	@Override
 	public String toString() {
-		return "Node(" + getNodeId() + ", " + getType() + ", " + getData() + ")";
+		return "Node(" + getNodeId() + ", " + getData() + ")";
 	}
 
 	public Object getData() {
@@ -231,14 +176,15 @@ class Node implements InputNode, OutputNode {
 	}
 
 	public static OutputPort pureOperation(final PureOperation operation, final OutputPort... args) {
-		return new Node(operation, NodeType.PURE_OPERATION, false, 1, null, args).getOutputArg(0);
+		return new Node(operation, false, 1, null, args).getOutputArg(0);
 	}
 
 	public static OutputPort constant(final Type type, final Object value) {
 		return pureOperation(new LoadConstantOperation(type, value));
 	}
 
-	public static Node terminator(final Object data, final OutputPort environment, final OutputPort... input) {
-		return new Node(data, NodeType.TERMINATOR, false, 0, environment, input);
+	public static Node terminator(final BlockTerminator operation, final OutputPort environment,
+			final OutputPort... input) {
+		return new Node(operation, false, 0, environment, input);
 	}
 }

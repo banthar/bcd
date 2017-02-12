@@ -2,7 +2,7 @@ package bdc;
 
 import java.util.Map;
 
-public class JumpTable {
+public class JumpTable extends Jump {
 
 	private final int defaultOffset;
 	private final Map<Integer, Integer> lookupTable;

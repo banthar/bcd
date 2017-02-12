@@ -34,8 +34,8 @@ public class InstructionParser {
 		}
 		final byte[] instructionBytes = new byte[codeLength];
 		dataInput.readFully(instructionBytes);
-		final BasicBlockBuilder block = parseInstructions(new MethodBuilder(),
-				ByteBuffer.wrap(instructionBytes).asReadOnlyBuffer(), constantPool, selfType, methodType);
+		final BasicBlockBuilder block = parseInstructions(ByteBuffer.wrap(instructionBytes).asReadOnlyBuffer(),
+				constantPool, selfType, methodType);
 		final int exceptionLength = dataInput.readUnsignedShort();
 		for (int i = 0; i < exceptionLength; i++) {
 			final int startPc = dataInput.readUnsignedShort();
@@ -97,16 +97,15 @@ public class InstructionParser {
 		}
 	}
 
-	private static BasicBlockBuilder parseInstructions(final MethodBuilder methodBuilder, final ByteBuffer in,
-			final ConstantPool constantPool, final ReferenceType selfType, final MethodType methodType)
-			throws ClassFormatException {
+	private static BasicBlockBuilder parseInstructions(final ByteBuffer in, final ConstantPool constantPool,
+			final ReferenceType selfType, final MethodType methodType) throws ClassFormatException {
 		final Map<Integer, BasicBlockBuilder> blocks = new HashMap<>();
 		final Function<Integer, BasicBlockBuilder> getBlock = new Function<Integer, BasicBlockBuilder>() {
 			@Override
 			public BasicBlockBuilder apply(final Integer id) {
 				BasicBlockBuilder block = blocks.get(id);
 				if (block == null) {
-					block = methodBuilder.createBasicBlock();
+					block = BasicBlockBuilder.createBlock();
 					blocks.put(id, block);
 				}
 				return block;

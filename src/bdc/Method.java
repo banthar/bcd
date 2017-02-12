@@ -12,7 +12,6 @@ import java.util.Set;
 
 import bdc.ConstantPool.ClassReference;
 import bdc.ConstantPool.MethodReference;
-import bdc.Node.NodeType;
 import bdc.Type.MethodType;
 import bdc.Type.PrimitiveType;
 
@@ -61,8 +60,8 @@ public class Method {
 			return;
 		}
 		final DataInputStream dataInput = new DataInputStream(new ByteArrayInputStream(this.code));
-		final BasicBlockBuilder block = InstructionParser.parseCode(dataInput, this.constantPool,
-				this.selfType.getType(), MethodType.fromDescriptor(this.descriptor));
+		final BasicBlockBuilder block = linkInitBlock(InstructionParser.parseCode(dataInput, this.constantPool,
+				this.selfType.getType(), MethodType.fromDescriptor(this.descriptor)));
 		if (dataInput.read() != -1) {
 			throw new ClassFormatException("Extra bytes at end of method code");
 		}
@@ -75,9 +74,16 @@ public class Method {
 		resolve();
 	}
 
+	private BasicBlockBuilder linkInitBlock(final BasicBlockBuilder mainBlock) {
+		final BasicBlockBuilder block = BasicBlockBuilder.createMethodInitBlock(this);
+		block.jump(mainBlock);
+		return block;
+
+	}
+
 	public void resolve() throws IOException, ClassFormatException {
-		for (final BasicBlockBuilder block : this.block.getAllTargetBlocks()) {
-			for (final Node node : block.inputNode.getAllLinkedNodes()) {
+		for (final BasicBlockBuilder block : this.block.getAllLinkedBlocks()) {
+			for (final Node node : block.getNodes()) {
 				if (node.getData() instanceof MethodReference) {
 					final MethodReference reference = (MethodReference) node.getData();
 					try {
@@ -129,7 +135,7 @@ public class Method {
 	}
 
 	public void assertReturnsConstant(final Object expectedValue) {
-		if (this.block.terminator.getType() != NodeType.TERMINATOR) {
+		if (!(this.block.terminator.getData() instanceof BlockTerminator)) {
 			throw new AssertionError("Invalid terminator: " + this.block.terminator);
 		}
 		if (!this.block.jumpsOut.isEmpty()) {
@@ -141,7 +147,7 @@ public class Method {
 		}
 
 		final Node environmentSource = this.block.terminator.getInput(PortId.environment()).getSource().getNode();
-		if (environmentSource.getType() != NodeType.INIT) {
+		if (!(environmentSource.getData() instanceof MethodInit)) {
 			throw new IllegalStateException("Method modifies environment: " + environmentSource);
 		}
 		final Node sourceNode = this.block.terminator.getInput(PortId.arg(0)).getSource().getNode();

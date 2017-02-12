@@ -10,7 +10,7 @@ public class ProgramTransformations {
 	}
 
 	private static void removeDirectlyReturnedValuesFromMethod(final Method method) {
-		for (final Entry<PortId, PortId> entry : BlockTransformations.getConstantOutputs(method.getBlock())
+		for (final Entry<PortId, PortId> entry : BlockTransformations.removeConstantOutputs(method.getBlock())
 				.entrySet()) {
 			for (final Node caller : method.getCallers()) {
 				final PortId outputPort = entry.getValue();

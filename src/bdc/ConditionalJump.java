@@ -3,7 +3,7 @@ package bdc;
 import bdc.BasicBlockBuilder.CompareType;
 import bdc.Type.PrimitiveType;
 
-public class ConditionalJump {
+public class ConditionalJump extends Jump {
 
 	private final PrimitiveType type;
 	private final CompareType compareType;

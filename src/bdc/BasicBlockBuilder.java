@@ -15,7 +15,6 @@ import java.util.Set;
 import bdc.ConstantPool.ClassReference;
 import bdc.ConstantPool.FieldReference;
 import bdc.ConstantPool.MethodReference;
-import bdc.Node.NodeType;
 import bdc.PortId.PortType;
 import bdc.Type.MethodType;
 import bdc.Type.PrimitiveType;
@@ -66,14 +65,8 @@ public class BasicBlockBuilder {
 		List<T> print(Node operation);
 	}
 
-	class Constant extends Node {
-		public Constant(final Type type, final Object value) {
-			super(Arrays.asList("const", type, value), NodeType.CONSTANT, false, 1, null, Collections.emptyList());
-		}
-	}
-
-	final Node inputNode = new Node(Arrays.asList(this), NodeType.INIT, true, 0, null);
-	private OutputPort environment = this.inputNode.getOutputEnvironment();
+	final Node inputNode;
+	private OutputPort environment;
 	Node terminator = null;
 	List<BasicBlockBuilder> jumpsOut = new ArrayList<>();
 	Set<BasicBlockBuilder> jumpsIn = new HashSet<>();
@@ -82,26 +75,30 @@ public class BasicBlockBuilder {
 
 	private final int id = nextId++;
 
+	private BasicBlockBuilder() {
+		this.inputNode = new Node(null, true, 0, null);
+		this.environment = this.inputNode.getOutputEnvironment();
+	}
+
 	public void putLocal(final int id, final OutputPort value) {
-		final Node operation = new Node(id, NodeType.STORE_LOCAL, true, 0, this.environment, value);
+		final Node operation = new Node(new StoreLocal(id), true, 0, this.environment, value);
 		this.environment = operation.getOutputEnvironment();
 	}
 
 	public OutputPort getLocal(final int id) {
-		final Node operation = new Node(id, NodeType.LOAD_LOCAL, false, 1, this.environment);
+		final Node operation = new Node(new LoadLocal(id), false, 1, this.environment);
 		return operation.getOutputArg(0);
 	}
 
 	public OutputPort pop() {
-		final Node operation = new Node(Arrays.asList("pop"), NodeType.POP, true, 1, this.environment);
+		final Node operation = new Node(new Pop(), true, 1, this.environment);
 		this.environment = operation.getOutputEnvironment();
 		return operation.getOutputArg(0);
 
 	}
 
 	public void push(final OutputPort value) {
-		this.environment = new Node(Arrays.asList("push"), NodeType.PUSH, true, 0, this.environment, value)
-				.getOutputEnvironment();
+		this.environment = new Node(new Push(), true, 0, this.environment, value).getOutputEnvironment();
 	}
 
 	private OutputPort constant(final Type type, final Object value) {
@@ -164,62 +161,56 @@ public class BasicBlockBuilder {
 	}
 
 	public OutputPort loadElement(final PrimitiveType elementType, final OutputPort arrayref, final OutputPort index) {
-		final Node operation = new Node(Arrays.asList("load_element", elementType), NodeType.LOAD_ELEMENT, false, 1,
-				this.environment, arrayref, index);
+		final Node operation = new Node(Arrays.asList("load_element", elementType), false, 1, this.environment,
+				arrayref, index);
 		return operation.getOutputArg(0);
 	}
 
 	public void storeElement(final OutputPort arrayref, final OutputPort index) {
-		final Node operation = new Node(Arrays.asList("store_element"), NodeType.STORE_ELEMENT, true, 0,
-				this.environment, arrayref, index);
+		final Node operation = new Node(Arrays.asList("store_element"), true, 0, this.environment, arrayref, index);
 		this.environment = operation.getOutputEnvironment();
 	}
 
 	public OutputPort checkedCast(final ClassReference type, final OutputPort value) {
-		final Node operation = new Node(Arrays.asList("checked_cast", type), NodeType.CHECKED_CAST, false, 1, null,
-				value);
+		final Node operation = new Node(Arrays.asList("checked_cast", type), false, 1, null, value);
 		return operation.getOutputArg(0);
 	}
 
 	public OutputPort instanceOf(final ClassReference type, final OutputPort value) {
-		final Node operation = new Node(Arrays.asList("instance_of", type), NodeType.INSTANCE_OF, false, 1, null,
-				value);
+		final Node operation = new Node(Arrays.asList("instance_of", type), false, 1, null, value);
 		return operation.getOutputArg(0);
 	}
 
 	public void monitorEnter(final OutputPort monitor) {
-		final Node operation = new Node(Arrays.asList("monitor_enter"), NodeType.MONITOR_ENTER, true, 1,
-				this.environment, monitor);
+		final Node operation = new Node(Arrays.asList("monitor_enter"), true, 1, this.environment, monitor);
 		this.environment = operation.getOutputEnvironment();
 	}
 
 	public void monitorExit(final OutputPort monitor) {
-		final Node operation = new Node(Arrays.asList("monitor_exit"), NodeType.MONITOR_EXIT, true, 1, this.environment,
-				monitor);
+		final Node operation = new Node(Arrays.asList("monitor_exit"), true, 1, this.environment, monitor);
 		this.environment = operation.getOutputEnvironment();
 	}
 
 	public OutputPort loadStaticField(final FieldReference fieldReference) {
-		final Node operation = new Node(Arrays.asList("load_static_field", fieldReference), NodeType.LOAD_STATIC_FIELD,
-				false, 1, this.environment);
+		final Node operation = new Node(Arrays.asList("load_static_field", fieldReference), false, 1, this.environment);
 		return operation.getOutputArg(0);
 	}
 
 	public void storeStaticField(final FieldReference fieldReference, final OutputPort value) {
-		final Node operation = new Node(Arrays.asList("store_static_field", fieldReference),
-				NodeType.STORE_STATIC_FIELD, true, 1, this.environment, value);
+		final Node operation = new Node(Arrays.asList("store_static_field", fieldReference), true, 1, this.environment,
+				value);
 		this.environment = operation.getOutputEnvironment();
 	}
 
 	public OutputPort loadField(final FieldReference fieldReference, final OutputPort target) {
-		final Node operation = new Node(Arrays.asList("load_field", fieldReference), NodeType.LOAD_FIELD, false, 1,
-				this.environment, target);
+		final Node operation = new Node(Arrays.asList("load_field", fieldReference), false, 1, this.environment,
+				target);
 		return operation.getOutputArg(0);
 	}
 
 	public void storeField(final FieldReference fieldReference, final OutputPort target, final OutputPort value) {
-		final Node operation = new Node(Arrays.asList("store_field", fieldReference), NodeType.STORE_FIELD, true, 1,
-				this.environment, target, value);
+		final Node operation = new Node(Arrays.asList("store_field", fieldReference), true, 1, this.environment, target,
+				value);
 		this.environment = operation.getOutputEnvironment();
 	}
 
@@ -236,8 +227,7 @@ public class BasicBlockBuilder {
 			input.add(target);
 		}
 		input.addAll(args);
-		final Node operation = new Node(methodReference, NodeType.INVOKE, true, methodType.isVoid() ? 0 : 1,
-				this.environment, input);
+		final Node operation = new Node(methodReference, true, methodType.isVoid() ? 0 : 1, this.environment, input);
 		this.environment = operation.getOutputEnvironment();
 		if (methodType.isVoid()) {
 			return Collections.emptyList();
@@ -263,30 +253,26 @@ public class BasicBlockBuilder {
 	}
 
 	public OutputPort newInstance(final ClassReference classReference) {
-		final Node operation = new Node(Arrays.asList("new_instance", classReference), NodeType.NEW_INSTANCE, true, 1,
-				this.environment);
+		final Node operation = new Node(Arrays.asList("new_instance", classReference), true, 1, this.environment);
 		this.environment = operation.getOutputEnvironment();
 		return operation.getOutputArg(0);
 	}
 
 	public OutputPort newPrimitiveArray(final PrimitiveType type, final OutputPort size) {
-		final Node operation = new Node(Arrays.asList("new_primitive_array", type), NodeType.NEW_PRIMITIVE_ARRAY, true,
-				2, this.environment, size);
+		final Node operation = new Node(Arrays.asList("new_primitive_array", type), true, 2, this.environment, size);
 		this.environment = operation.getOutputEnvironment();
 		return operation.getOutputArg(0);
 	}
 
 	public OutputPort newArray(final ClassReference type, final OutputPort size) {
-		final Node operation = new Node(Arrays.asList("new_array", type), NodeType.NEW_ARRAY, true, 2, this.environment,
-				size);
+		final Node operation = new Node(Arrays.asList("new_array", type), true, 2, this.environment, size);
 		this.environment = operation.getOutputEnvironment();
 		return operation.getOutputArg(0);
 
 	}
 
 	public OutputPort arrayLength(final OutputPort array) {
-		final Node operation = new Node(Arrays.asList("array_length"), NodeType.ARRAY_LENGTH, false, 1,
-				this.environment, array);
+		final Node operation = new Node(Arrays.asList("array_length"), false, 1, this.environment, array);
 		return operation.getOutputArg(0);
 	}
 
@@ -306,8 +292,8 @@ public class BasicBlockBuilder {
 
 	public void jumpIf(final PrimitiveType type, final BasicBlockBuilder then, final BasicBlockBuilder otherwise,
 			final CompareType compareType, final OutputPort left, final OutputPort right) {
-		terminate(new Node(new ConditionalJump(type, compareType), NodeType.TERMINATOR, false, 0, this.environment,
-				left, right), then, otherwise);
+		terminate(new Node(new ConditionalJump(type, compareType), false, 0, this.environment, left, right), then,
+				otherwise);
 	}
 
 	public void jumpTable(final OutputPort value, final int defaultOffset, final Map<Integer, Integer> lookupTable,
@@ -317,7 +303,7 @@ public class BasicBlockBuilder {
 	}
 
 	public void jump(final BasicBlockBuilder target) {
-		terminate(Node.terminator(Arrays.asList("jump"), this.environment), target);
+		terminate(Node.terminator(new Jump(), this.environment), target);
 	}
 
 	public void returnError(final OutputPort exception) {
@@ -434,7 +420,7 @@ public class BasicBlockBuilder {
 					out.format("|<%s> %s", entry.getValue().getId(), entry.getKey() + ": " + entry.getValue().getId());
 				}
 				out.print("}|{");
-				out.print(String.join("|", node.getNodeId(), node.getType().toString(),
+				out.print(String.join("|", node.getNodeId(),
 						node.getData().toString().replaceAll("([<>\"\\\\\\]\\[{}])", "\\\\$1")));
 				out.print("}|{");
 				out.print("<out>out");
@@ -470,7 +456,7 @@ public class BasicBlockBuilder {
 
 	}
 
-	private Set<Node> getNodes() {
+	public Set<Node> getNodes() {
 		final HashSet<Node> nodes = new HashSet<>();
 		nodes.addAll(this.inputNode.getAllLinkedNodes());
 		nodes.addAll(this.terminator.getAllLinkedNodes());
@@ -519,6 +505,18 @@ public class BasicBlockBuilder {
 			throw new IllegalStateException();
 		}
 		removeTerminator();
+	}
+
+	public static BasicBlockBuilder createBlock() {
+		final BasicBlockBuilder block = new BasicBlockBuilder();
+		block.inputNode.data = new BlockInit(block);
+		return block;
+	}
+
+	public static BasicBlockBuilder createMethodInitBlock(final Method method) {
+		final BasicBlockBuilder block = new BasicBlockBuilder();
+		block.inputNode.data = new MethodInit(method);
+		return block;
 	}
 
 }

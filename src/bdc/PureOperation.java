@@ -7,7 +7,7 @@ import bdc.BasicBlockBuilder.BitwiseOperationType;
 import bdc.BasicBlockBuilder.ShiftType;
 import bdc.Type.PrimitiveType;
 
-public class PureOperation {
+public class PureOperation implements NodeOperation {
 
 	private final Type type;
 	private final int inputPorts;

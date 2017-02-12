@@ -1,5 +1,5 @@
 package bdc;
 
-public class FunctionTerminator {
+public class FunctionTerminator extends BlockTerminator {
 
 }

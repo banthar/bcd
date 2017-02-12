@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import bdc.Node.NodeType;
 import bdc.PortId.PortType;
 
 public class BlockTransformations {
@@ -106,8 +105,7 @@ public class BlockTransformations {
 		Chain<OutputPort> newStack = stack;
 		int newStackArgs = stackArgs;
 		final Map<Integer, OutputPort> newLocals = new HashMap<>(locals);
-
-		if (node.getType() == NodeType.TERMINATOR && !block.jumpsOut.isEmpty()) {
+		if (node.getData() instanceof Jump) {
 			int i = 0;
 			Chain<OutputPort> frame = stack;
 			while (frame != null) {
@@ -126,16 +124,15 @@ public class BlockTransformations {
 		} else {
 			targets = Collections.emptySet();
 		}
-		if (node.getType() == NodeType.PUSH) {
+		if (node.getData() instanceof Push) {
 			final OutputPort value = node.getInput(PortId.arg(0)).unlink();
 			node.getOutputEnvironment().replaceWith(node.getInputEnvironment().unlink());
 			newStack = Chain.append(value, stack);
-		} else if (node.getType() == NodeType.STORE_LOCAL) {
+		} else if (node.getData() instanceof StoreLocal) {
 			final OutputPort value = node.getInput(PortId.arg(0)).unlink();
-			newLocals.put((Integer) node.getData(), value);
+			newLocals.put(((StoreLocal) node.getData()).getIndex(), value);
 			node.getOutputEnvironment().replaceWith(node.getInputEnvironment().unlink());
-
-		} else if (node.getType() == NodeType.POP) {
+		} else if (node.getData() instanceof Pop) {
 			node.getOutputEnvironment().replaceWith(node.getInputEnvironment().unlink());
 			if (stack != null) {
 				node.getOutputArg(0).replaceWith(stack.head);
@@ -143,8 +140,8 @@ public class BlockTransformations {
 			} else {
 				node.getOutputArg(0).replaceWith(block.inputNode.addOutput(PortId.stack(newStackArgs++)));
 			}
-		} else if (node.getType() == NodeType.LOAD_LOCAL) {
-			final int localId = ((Integer) node.getData()).intValue();
+		} else if (node.getData() instanceof LoadLocal) {
+			final int localId = ((LoadLocal) node.getData()).getIndex();
 			OutputPort storedValue = locals.get(localId);
 			if (storedValue == null) {
 				storedValue = block.inputNode.provideOutput(PortId.local(localId));
@@ -230,7 +227,7 @@ public class BlockTransformations {
 		}
 	}
 
-	public static Map<PortId, PortId> getConstantOutputs(final BasicBlockBuilder init) {
+	public static Map<PortId, PortId> removeConstantOutputs(final BasicBlockBuilder init) {
 		final Map<PortId, PortId> portsToInline = new HashMap<>();
 		for (final PortId portId : Arrays.asList(PortId.environment(), PortId.arg(0))) {
 			final List<Node> terminators = new ArrayList<>();
