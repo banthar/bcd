@@ -115,7 +115,7 @@ public class Method {
 		return this.block;
 	}
 
-	public Set<Method> getTargetMethods() {
+	public Set<Method> getCalees() {
 		final Set<Method> targets = new HashSet<>();
 		for (final Node node : this.block.terminator.getAllLinkedNodes()) {
 			if (node.getData() instanceof Method) {
@@ -145,10 +145,9 @@ public class Method {
 			throw new IllegalStateException("Terminator node should have exactly one input: " + this.block.terminator
 					+ ": " + this.block.terminator.getAllInputPorts());
 		}
-
 		final Node environmentSource = this.block.terminator.getInput(PortId.environment()).getSource().getNode();
 		if (!(environmentSource.getData() instanceof MethodInit)) {
-			throw new IllegalStateException("Method modifies environment: " + environmentSource);
+			throw new AssertionError("Method modifies environment: " + environmentSource);
 		}
 		final Node sourceNode = this.block.terminator.getInput(PortId.arg(0)).getSource().getNode();
 		if (sourceNode.getData() instanceof LoadConstantOperation) {
@@ -161,7 +160,7 @@ public class Method {
 				throw new AssertionError("expected: " + toString(expectedValue) + " but was " + toString(actualValue));
 			}
 		} else {
-			throw new IllegalStateException("Expected constant node: " + sourceNode);
+			throw new AssertionError("Expected constant node: " + sourceNode);
 		}
 
 	}

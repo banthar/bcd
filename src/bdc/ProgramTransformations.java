@@ -1,16 +1,25 @@
 package bdc;
 
+import java.util.List;
 import java.util.Map.Entry;
 
 public class ProgramTransformations {
-	public static void removeDirectlyReturnedValues(final bdc.Method mainMethod) {
-		for (final Method target : mainMethod.getTargetMethods()) {
-			removeDirectlyReturnedValuesFromMethod(target);
+
+	public static void optimizeMainMethod(final Method mainMethod) {
+		removeDirectlyReturnedValuesFromCalees(mainMethod);
+		removeUnusedArgumentsFromCalees(mainMethod);
+		removeUnusedArguments(mainMethod);
+	}
+
+	private static void removeDirectlyReturnedValuesFromCalees(final Method mainMethod) {
+		for (final Method target : mainMethod.getCalees()) {
+			removeDirectlyReturned(target);
 		}
 	}
 
-	private static void removeDirectlyReturnedValuesFromMethod(final Method method) {
-		for (final Entry<PortId, PortId> entry : BlockTransformations.removeConstantOutputs(method.getBlock())
+	private static void removeDirectlyReturned(final Method method) {
+		removeDirectlyReturnedValuesFromCalees(method);
+		for (final Entry<PortId, PortId> entry : BlockTransformations.removeDirectOutputs(method.getBlock())
 				.entrySet()) {
 			for (final Node caller : method.getCallers()) {
 				final PortId outputPort = entry.getValue();
@@ -19,5 +28,24 @@ public class ProgramTransformations {
 				caller.removeOutput(entry.getKey());
 			}
 		}
+	}
+
+	private static void removeUnusedArgumentsFromCalees(final Method mainMethod) {
+		for (final Method target : mainMethod.getCalees()) {
+			removeUnusedArguments(target);
+		}
+	}
+
+	private static void removeUnusedArguments(final Method mainMethod) {
+		final List<PortId> unusedArguments = BlockTransformations.removeUnusedArguments(mainMethod.getBlock());
+		for (final Node caller : mainMethod.getCallers()) {
+			System.out.println(unusedArguments);
+			System.out.println(caller);
+			System.out.println(caller.getAllInputPorts());
+			for (final PortId argumentId : unusedArguments) {
+				caller.removeInput(argumentId);
+			}
+		}
+		System.out.println();
 	}
 }

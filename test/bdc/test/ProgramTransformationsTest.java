@@ -14,6 +14,15 @@ public class ProgramTransformationsTest {
 		return zero();
 	}
 
+	private static int zero(final int a) {
+		return 0;
+	}
+
+	@MethodReturnsConstant
+	public static int inline_constant_function_with_argument() {
+		return zero(0);
+	}
+
 	@MethodReturnsConstant
 	public static int inline_multiple_constant_functions() {
 		return zero() + zero();
@@ -23,9 +32,18 @@ public class ProgramTransformationsTest {
 		return a;
 	}
 
+	private static int identity2(final int a) {
+		return identity(a);
+	}
+
 	@MethodReturnsConstant
 	public static int inline_identity() {
 		return identity(0);
+	}
+
+	@MethodReturnsConstant
+	public static int inline_nested_identity() {
+		return identity2(0);
 	}
 
 	private static int max(final int a, final int b) {

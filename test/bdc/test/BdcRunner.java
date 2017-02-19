@@ -68,21 +68,23 @@ public class BdcRunner extends Runner implements Filterable {
 		final bdc.Method m = type.getMethod(name, signature);
 		try {
 			m.parse();
-			ProgramTransformations.removeDirectlyReturnedValues(m);
+			ProgramTransformations.optimizeMainMethod(m);
 			m.assertReturnsConstant(expectedValue);
 		} catch (final Throwable e) {
 			try {
 				try (final PrintStream out = new PrintStream(new File(name + ".dot"))) {
 					out.println("digraph G {");
 					m.dump(out);
-					for (final bdc.Method target : m.getTargetMethods()) {
+					for (final bdc.Method target : m.getCalees()) {
 						target.dump(out);
 					}
 					out.println("}");
 				}
-			} finally {
+			} catch (final Throwable e1) {
+				e.addSuppressed(e);
 				throw e;
 			}
+			throw e;
 		}
 	}
 

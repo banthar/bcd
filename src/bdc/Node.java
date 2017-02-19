@@ -126,7 +126,11 @@ class Node implements InputNode, OutputNode {
 	}
 
 	public void removeInput(final PortId port) {
-		this.input.remove(port).unlink();
+		final InputPort removed = this.input.remove(port);
+		if (removed == null) {
+			throw new IllegalStateException("No such input port: " + port);
+		}
+		removed.unlink();
 	}
 
 	public void removeOutput(final PortId port) {

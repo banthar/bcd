@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -227,7 +228,7 @@ public class BlockTransformations {
 		}
 	}
 
-	public static Map<PortId, PortId> removeConstantOutputs(final BasicBlockBuilder init) {
+	public static Map<PortId, PortId> removeDirectOutputs(final BasicBlockBuilder init) {
 		final Map<PortId, PortId> portsToInline = new HashMap<>();
 		for (final PortId portId : Arrays.asList(PortId.environment(), PortId.arg(0))) {
 			final List<Node> terminators = new ArrayList<>();
@@ -272,5 +273,22 @@ public class BlockTransformations {
 
 	private static OutputPort getSource(final Node terminatorNode, final PortId portId) {
 		return terminatorNode.getInput(portId).getSource();
+	}
+
+	public static List<PortId> removeUnusedArguments(final BasicBlockBuilder block) {
+		final List<PortId> removedPorts = new ArrayList<>();
+		final Node node = block.inputNode;
+		final Iterator<? extends Entry<PortId, ? extends OutputPort>> iterator = node.getAllOutputPorts().entrySet()
+				.iterator();
+		while (iterator.hasNext()) {
+			final Entry<PortId, ? extends OutputPort> entry = iterator.next();
+			final PortId id = entry.getKey();
+			final OutputPort port = entry.getValue();
+			if (port.getTargets().isEmpty()) {
+				iterator.remove();
+				removedPorts.add(calleToCallerPort(id));
+			}
+		}
+		return removedPorts;
 	}
 }
