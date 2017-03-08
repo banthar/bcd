@@ -115,7 +115,7 @@ public class Method {
 		return this.block;
 	}
 
-	public Set<Method> getCalees() {
+	public Set<Method> getCallees() {
 		final Set<Method> targets = new HashSet<>();
 		for (final Node node : this.block.terminator.getAllLinkedNodes()) {
 			if (node.getData() instanceof Method) {

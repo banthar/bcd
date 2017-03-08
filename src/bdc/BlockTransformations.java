@@ -263,7 +263,7 @@ public class BlockTransformations {
 		case LOCAL:
 			return PortId.arg(portId.index);
 		default:
-			throw new IllegalStateException("Invalid calee argument port: " + portId);
+			throw new IllegalStateException("Invalid callee argument port: " + portId);
 		}
 	}
 

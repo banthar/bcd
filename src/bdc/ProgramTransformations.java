@@ -6,19 +6,19 @@ import java.util.Map.Entry;
 public class ProgramTransformations {
 
 	public static void optimizeMainMethod(final Method mainMethod) {
-		removeDirectlyReturnedValuesFromCalees(mainMethod);
-		removeUnusedArgumentsFromCalees(mainMethod);
+		removeDirectlyReturnedValuesFromCallees(mainMethod);
+		removeUnusedArgumentsFromCallees(mainMethod);
 		removeUnusedArguments(mainMethod);
 	}
 
-	private static void removeDirectlyReturnedValuesFromCalees(final Method mainMethod) {
-		for (final Method target : mainMethod.getCalees()) {
+	private static void removeDirectlyReturnedValuesFromCallees(final Method mainMethod) {
+		for (final Method target : mainMethod.getCallees()) {
 			removeDirectlyReturned(target);
 		}
 	}
 
 	private static void removeDirectlyReturned(final Method method) {
-		removeDirectlyReturnedValuesFromCalees(method);
+		removeDirectlyReturnedValuesFromCallees(method);
 		for (final Entry<PortId, PortId> entry : BlockTransformations.removeDirectOutputs(method.getBlock())
 				.entrySet()) {
 			for (final Node caller : method.getCallers()) {
@@ -30,8 +30,8 @@ public class ProgramTransformations {
 		}
 	}
 
-	private static void removeUnusedArgumentsFromCalees(final Method mainMethod) {
-		for (final Method target : mainMethod.getCalees()) {
+	private static void removeUnusedArgumentsFromCallees(final Method mainMethod) {
+		for (final Method target : mainMethod.getCallees()) {
 			removeUnusedArguments(target);
 		}
 	}
