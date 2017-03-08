@@ -3,10 +3,11 @@ package bdc.test;
 import java.io.File;
 import java.io.PrintStream;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
 
 import org.junit.runner.Description;
 import org.junit.runner.Runner;
@@ -18,6 +19,7 @@ import org.junit.runner.notification.RunNotifier;
 
 import bdc.ProgramTransformations;
 import bdc.Type;
+import bdc.Type.FieldType;
 import bdc.URLClassParser;
 
 public class BdcRunner extends Runner implements Filterable {
@@ -51,8 +53,12 @@ public class BdcRunner extends Runner implements Filterable {
 			final Description d = Description.createTestDescription(this.testClass, m.getName());
 			runNotifier.fireTestStarted(d);
 			try {
-				final Object expectedValue = m.invoke(null);
-				final String descriptor = new Type.MethodType(Arrays.asList(), Type.fromJavaClass(m.getReturnType()))
+				final Object expectedValue = m.invoke(null, createRandomParameters(m.getParameters()));
+				final List<FieldType> params = new ArrayList<>();
+				for (final Parameter p : m.getParameters()) {
+					params.add(Type.fromJavaClass(p.getType()));
+				}
+				final String descriptor = new Type.MethodType(params, Type.fromJavaClass(m.getReturnType()))
 						.toDescriptor();
 				runTest(m.getName(), descriptor, expectedValue);
 			} catch (final Throwable e) {
@@ -60,6 +66,22 @@ public class BdcRunner extends Runner implements Filterable {
 			}
 			runNotifier.fireTestFinished(d);
 		}
+	}
+
+	private Object[] createRandomParameters(final Parameter[] parameters) {
+		final Random random = new Random();
+		final Object[] objects = new Object[parameters.length];
+		for (int i = 0; i < parameters.length; i++) {
+			final Class<?> type = parameters[i].getType();
+			if (type == boolean.class) {
+				objects[i] = random.nextBoolean();
+			} else if (type == int.class) {
+				objects[i] = random.nextInt();
+			} else {
+				throw new IllegalStateException("Unsupported type: " + type);
+			}
+		}
+		return objects;
 	}
 
 	public void runTest(final String name, final String signature, final Object expectedValue) throws Exception {

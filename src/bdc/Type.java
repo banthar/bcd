@@ -88,7 +88,7 @@ public interface Type {
 			return descriptor;
 		}
 
-		static Type fromJavaType(final java.lang.Class<?> type) {
+		static FieldType fromJavaType(final java.lang.Class<?> type) {
 			if (type == int.class) {
 				return PrimitiveType.Integer;
 			} else if (type == boolean.class) {
@@ -195,10 +195,13 @@ public interface Type {
 
 		@Override
 		public String toDescriptor() {
-			if (!argumentTypes.isEmpty()) {
-				throw new IllegalStateException();
+			String descriptor = "(";
+			for (final FieldType arg : argumentTypes) {
+				descriptor += arg.toDescriptor();
 			}
-			return "()" + returnType.toDescriptor();
+			descriptor += ")";
+			descriptor += returnType.toDescriptor();
+			return descriptor;
 		}
 	}
 
@@ -403,7 +406,7 @@ public interface Type {
 		}
 	}
 
-	static Type fromJavaClass(final java.lang.Class<?> type) {
+	static FieldType fromJavaClass(final java.lang.Class<?> type) {
 		if (type.isPrimitive()) {
 			return PrimitiveType.fromJavaType(type);
 		} else {
