@@ -117,8 +117,10 @@ public class ProgramTransformations {
 					} else {
 						throw new IllegalStateException();
 					}
+				} else if (terminator.getData() instanceof Jump) {
+					throw new IllegalStateException("Unsupported node: " + terminator);
 				} else {
-					throw new IllegalStateException();
+					throw new IllegalStateException("Unsupported node: " + terminator);
 				}
 			}
 		}

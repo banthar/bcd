@@ -101,6 +101,35 @@ public class BlockTransformations {
 		}
 	}
 
+	private static void removeUnusedInterBlockPorts(final BasicBlockBuilder startBlock,
+			final HashSet<BasicBlockBuilder> visited) {
+		if (visited.add(startBlock)) {
+			for (final BasicBlockBuilder target : startBlock.jumpsOut) {
+				removeUnusedInterBlockPorts(target, visited);
+			}
+			if (startBlock.terminator.getData() instanceof Jump) {
+				final Set<PortId> usedPorts = new HashSet<>();
+				for (final BasicBlockBuilder target : startBlock.jumpsOut) {
+					usedPorts.addAll(target.inputNode.getAllOutputPorts().keySet());
+				}
+				System.out.println(usedPorts + "  " + startBlock.terminator.getAllInputPorts().keySet());
+				for (final Entry<PortId, ? extends InputPort> entry : new ArrayList<>(
+						startBlock.terminator.getAllInputPorts().entrySet())) {
+					if (!usedPorts.contains(entry.getKey())) {
+						startBlock.terminator.removeInput(entry.getKey());
+					}
+				}
+			}
+			if (startBlock.inputNode.getData() instanceof BlockInit) {
+				for (final OutputPort port : new ArrayList<>(startBlock.inputNode.getAllOutputPorts().values())) {
+					if (port.getTargets().isEmpty()) {
+						startBlock.inputNode.removeOutput(port.getPortId());
+					}
+				}
+			}
+		}
+	}
+
 	private static void removePush(final BasicBlockBuilder block, final Node node, final Chain<OutputPort> stack,
 			final int stackArgs, final Map<Integer, OutputPort> locals) {
 		Chain<OutputPort> newStack = stack;
@@ -190,6 +219,8 @@ public class BlockTransformations {
 				}
 			}
 		}
+		removeUnusedInterBlockPorts(init, new HashSet<>());
+		removeExtraBlockPorts(init, new HashSet<>());
 		return portsToInline;
 	}
 
@@ -209,7 +240,26 @@ public class BlockTransformations {
 	}
 
 	private static OutputPort getSource(final Node terminatorNode, final PortId portId) {
-		return terminatorNode.getInput(portId).getSource();
+		final OutputPort source = terminatorNode.getInput(portId).getSource();
+		if (source.getNode().getData() instanceof BlockInit) {
+			final BasicBlockBuilder block = ((BlockInit) source.getNode().getData()).getBlock();
+			OutputPort commonRoot = null;
+			for (final BasicBlockBuilder sourceBlock : block.jumpsIn) {
+				final OutputPort root = getSource(sourceBlock.terminator, source.getPortId());
+				if (commonRoot == null || isEqual(commonRoot, root)) {
+					commonRoot = root;
+				} else {
+					return null;
+				}
+			}
+			return commonRoot;
+		} else if (source.getNode().getData() instanceof MethodInit) {
+			return source;
+		} else if (source.getNode().getData() instanceof LoadConstantOperation) {
+			return source;
+		} else {
+			throw new IllegalStateException("Unsupported node type: " + source.getNode());
+		}
 	}
 
 	public static List<PortId> removeUnusedArguments(final BasicBlockBuilder block) {

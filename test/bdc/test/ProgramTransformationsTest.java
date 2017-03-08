@@ -86,4 +86,18 @@ public class ProgramTransformationsTest {
 	public static int inline_constant_function_with_switch() {
 		return constant_switch(0);
 	}
+
+	private static int constant_branch(final int a) {
+		if (a > 0) {
+			return 0;
+		} else {
+			return 0;
+		}
+	}
+
+	@MethodReturnsConstant
+	public static int inline_constant_function_with_branch() {
+		return constant_branch(0);
+	}
+
 }

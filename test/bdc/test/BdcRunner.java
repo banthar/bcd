@@ -103,7 +103,7 @@ public class BdcRunner extends Runner implements Filterable {
 					out.println("}");
 				}
 			} catch (final Throwable e1) {
-				e.addSuppressed(e);
+				e.addSuppressed(e1);
 				throw e;
 			}
 			throw e;

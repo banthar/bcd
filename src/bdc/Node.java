@@ -135,6 +135,9 @@ class Node implements InputNode, OutputNode {
 
 	public void removeOutput(final PortId port) {
 		final OutputPort removed = this.output.remove(port);
+		if (removed == null) {
+			throw new IllegalStateException("Port doesn't exist: " + port);
+		}
 		if (!removed.getTargets().isEmpty()) {
 			throw new IllegalStateException("Removing used output ports: " + removed);
 		}
