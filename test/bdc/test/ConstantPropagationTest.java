@@ -119,6 +119,16 @@ public class ConstantPropagationTest {
 	}
 
 	@MethodReturnsConstant
+	public static int multiply_by_zero(final int a) {
+		return a * 0;
+	}
+
+	@MethodReturnsConstant
+	public static int subtract_self(final int a) {
+		return a - a;
+	}
+
+	@MethodReturnsConstant
 	public static int remove_local_used_in_dead_right_branch() {
 		int a;
 		int b;

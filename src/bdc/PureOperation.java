@@ -1,6 +1,6 @@
 package bdc;
 
-import java.util.List;
+import java.util.Map;
 
 import bdc.BasicBlockBuilder.BinaryOperationType;
 import bdc.BasicBlockBuilder.BitwiseOperationType;
@@ -60,20 +60,42 @@ public class PureOperation implements NodeOperation {
 		return "PureOperation(" + this.type + ", " + this.inputPorts + ", " + this.operation + ")";
 	}
 
-	public Object compute(final List<Object> values) {
+	public Value compute(final Map<PortId, ? extends Value> values) {
 		if (values.size() != this.inputPorts) {
 			throw new IllegalStateException();
 		}
 		if (this.operation instanceof BinaryOperationType) {
-			switch ((BinaryOperationType) this.operation) {
-			case Add:
-				return (Integer) values.get(0) + (Integer) values.get(1);
-			case Subtract:
-				return (Integer) values.get(0) - (Integer) values.get(1);
-			case Multiply:
-				return (Integer) values.get(0) * (Integer) values.get(1);
-			case Divide:
-				return (Integer) values.get(0) / (Integer) values.get(1);
+			final Value value0 = values.get(PortId.arg(0));
+			final Value value1 = values.get(PortId.arg(1));
+			if (value0.isConstant() && value1.isConstant()) {
+				final Object arg0 = value0.getConstant();
+				final Object arg1 = value1.getConstant();
+				switch ((BinaryOperationType) this.operation) {
+				case Add:
+					return Value.integer((Integer) arg0 + (Integer) arg1);
+				case Subtract:
+					return Value.integer((Integer) arg0 - (Integer) arg1);
+				case Multiply:
+					return Value.integer((Integer) arg0 * (Integer) arg1);
+				case Divide:
+					return Value.integer((Integer) arg0 / (Integer) arg1);
+				}
+			} else if (value0.isConstant()) {
+				final Object arg0 = value0.getConstant();
+				if ((Integer) arg0 == 0 && this.operation == BinaryOperationType.Multiply) {
+					return Value.integer(0);
+				} else {
+					return Value.unknown();
+				}
+			} else if (value1.isConstant()) {
+				final Object arg1 = value1.getConstant();
+				if ((Integer) arg1 == 0 && this.operation == BinaryOperationType.Multiply) {
+					return Value.integer(0);
+				} else {
+					return Value.unknown();
+				}
+			} else {
+				return Value.unknown();
 			}
 		}
 		throw new IllegalStateException("Invalid operation: " + this.operation);

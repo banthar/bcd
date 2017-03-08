@@ -1,8 +1,9 @@
 package bdc;
 
-import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 
 public class ProgramTransformations {
@@ -57,11 +58,14 @@ public class ProgramTransformations {
 
 	private static boolean propagateConstants(final BasicBlockBuilder block, final Node node) {
 		boolean blocksRemoved = false;
-		boolean constantInput = true;
+		final Map<PortId, Value> constantInput = new HashMap<>();
 		for (final Entry<PortId, ? extends InputPort> port : node.getAllInputPorts().entrySet()) {
 			blocksRemoved |= propagateConstants(block, port.getValue().getSource().getNode());
-			if (!(port.getValue().getSource().getNode().getData() instanceof LoadConstantOperation)) {
-				constantInput = false;
+			final Object data = port.getValue().getSource().getNode().getData();
+			if (data instanceof LoadConstantOperation) {
+				constantInput.put(port.getKey(), Value.of(((LoadConstantOperation) data).getValue()));
+			} else {
+				constantInput.put(port.getKey(), Value.unknown());
 			}
 		}
 		if (node.getData() instanceof ConditionalJump) {
@@ -90,19 +94,15 @@ public class ProgramTransformations {
 				block.simplifyJump(block.getTarget(n));
 				blocksRemoved = true;
 			}
-		} else if (constantInput && node.getData() instanceof PureOperation
-				&& !(node.getData() instanceof LoadConstantOperation)) {
-			final List<Object> values = new ArrayList<>();
+		} else if (node.getData() instanceof PureOperation && !(node.getData() instanceof LoadConstantOperation)) {
 			final PureOperation operation = (PureOperation) node.getData();
-			for (int i = 0; i < operation.getInputPorts(); i++) {
-				final LoadConstantOperation argValue = (LoadConstantOperation) node.getInput(PortId.arg(i)).getSource()
-						.getNode().data;
-				values.add(argValue.getValue());
+			final Value computedValue = operation.compute(constantInput);
+			if (computedValue.isConstant()) {
+				node.getOutput(PortId.arg(0))
+						.replaceWith(Node.constant(operation.getReturnType(), computedValue.getConstant()));
 			}
-			node.getOutput(PortId.arg(0))
-					.replaceWith(Node.constant(operation.getReturnType(), operation.compute(values)));
 		} else if (node.getData() instanceof Method) {
-			if (constantInput) {
+			if (constantInput != null) {
 				final Method calee = (Method) node.getData();
 				final Node terminator = calee.getBlock().terminator;
 				if (terminator.getData() instanceof ReturnValues) {
@@ -118,7 +118,10 @@ public class ProgramTransformations {
 						throw new IllegalStateException();
 					}
 				} else if (terminator.getData() instanceof Jump) {
-					throw new IllegalStateException("Unsupported node: " + terminator);
+					final Value value = ((Jump) terminator.data).compute(constantInput);
+					if (value.isConstant()) {
+						// TODO inline function call
+					}
 				} else {
 					throw new IllegalStateException("Unsupported node: " + terminator);
 				}
