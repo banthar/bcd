@@ -6,6 +6,7 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,7 @@ import bdc.ConstantPool.ClassReference;
 import bdc.ConstantPool.FieldReference;
 import bdc.ConstantPool.MethodReference;
 import bdc.PortId.PortType;
+import bdc.Type.FieldType;
 import bdc.Type.MethodType;
 import bdc.Type.PrimitiveType;
 
@@ -101,7 +103,7 @@ public class BasicBlockBuilder {
 		this.environment = new Node(new Push(), true, 0, this.environment, value).getOutputEnvironment();
 	}
 
-	private OutputPort constant(final Type type, final Object value) {
+	private OutputPort constant(final FieldType type, final Object value) {
 		return Node.constant(type, value);
 	}
 
@@ -303,7 +305,7 @@ public class BasicBlockBuilder {
 	}
 
 	public void jump(final BasicBlockBuilder target) {
-		terminate(Node.terminator(new Jump(), this.environment), target);
+		terminate(Node.terminator(new UnconditionalJump(), this.environment), target);
 	}
 
 	public void returnError(final OutputPort exception) {
@@ -517,6 +519,37 @@ public class BasicBlockBuilder {
 		final BasicBlockBuilder block = new BasicBlockBuilder();
 		block.inputNode.data = new MethodInit(method);
 		return block;
+	}
+
+	public Map<PortId, Value> compute(final Map<PortId, Value> constantInput) {
+		if (this.terminator.getData() instanceof ReturnValues) {
+			if (!this.terminator.getAllInputPorts().keySet().equals(Collections.singleton(PortId.arg(0)))) {
+				throw new IllegalStateException();
+			}
+			final OutputPort source = this.terminator.getInput(PortId.arg(0)).getSource();
+			if (source.getNode().getData() instanceof LoadConstantOperation) {
+				final LoadConstantOperation constant = (LoadConstantOperation) source.getNode().getData();
+				final Map<PortId, Value> values = new HashMap<>();
+				values.put(PortId.arg(0), constant.toValue());
+				return values;
+			} else if (source.getNode().getData() instanceof PureOperation) {
+				System.out.println(source.getNode().getAllInputPorts());
+				System.out.println(source.getNode().getAllOutputPorts());
+				throw new IllegalStateException(constantInput + " " + source.getNode().getAllInputPorts());
+			} else {
+				throw new IllegalStateException("Unsupported node: " + source.getNode());
+			}
+		} else if (this.terminator.getData() instanceof Jump) {
+			final Value value = ((Jump) this.terminator.data).compute(constantInput);
+			if (value.isConstant()) {
+				final Map<PortId, Value> values = new HashMap<>();
+				values.put(PortId.arg(0), value);
+				return values;
+			}
+		} else {
+			throw new IllegalStateException("Unsupported node: " + this.terminator);
+		}
+		return Collections.emptyMap();
 	}
 
 }

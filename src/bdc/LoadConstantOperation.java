@@ -1,10 +1,12 @@
 package bdc;
 
+import bdc.Type.FieldType;
+
 public class LoadConstantOperation extends PureOperation {
 
 	private final Object value;
 
-	public LoadConstantOperation(final Type type, final Object value) {
+	public LoadConstantOperation(final FieldType type, final Object value) {
 		super(type, 0);
 		this.value = value;
 	}
@@ -16,6 +18,10 @@ public class LoadConstantOperation extends PureOperation {
 	@Override
 	public String toString() {
 		return "LoadConstantOperation(" + getType() + ", " + this.value + ")";
+	}
+
+	public Value toValue() {
+		return Value.of(getType(), this.value);
 	}
 
 }

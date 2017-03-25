@@ -1,6 +1,5 @@
 package bdc;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,7 +62,9 @@ public class ProgramTransformations {
 			blocksRemoved |= propagateConstants(block, port.getValue().getSource().getNode());
 			final Object data = port.getValue().getSource().getNode().getData();
 			if (data instanceof LoadConstantOperation) {
-				constantInput.put(port.getKey(), Value.of(((LoadConstantOperation) data).getValue()));
+				final LoadConstantOperation loadConstantOperation = (LoadConstantOperation) data;
+				constantInput.put(port.getKey(),
+						Value.of(loadConstantOperation.getType(), loadConstantOperation.getValue()));
 			} else {
 				constantInput.put(port.getKey(), Value.unknown());
 			}
@@ -104,26 +105,12 @@ public class ProgramTransformations {
 		} else if (node.getData() instanceof Method) {
 			if (constantInput != null) {
 				final Method calee = (Method) node.getData();
-				final Node terminator = calee.getBlock().terminator;
-				if (terminator.getData() instanceof ReturnValues) {
-					if (!terminator.getAllInputPorts().keySet().equals(Collections.singleton(PortId.arg(0)))) {
-						throw new IllegalStateException();
-					}
-					final OutputPort source = terminator.getInput(PortId.arg(0)).getSource();
-					if (source.getNode().getData() instanceof LoadConstantOperation) {
-						final LoadConstantOperation constant = (LoadConstantOperation) source.getNode().getData();
-						node.getOutput(PortId.arg(0))
-								.replaceWith(Node.constant(constant.getType(), constant.getValue()));
-					} else {
-						throw new IllegalStateException();
-					}
-				} else if (terminator.getData() instanceof Jump) {
-					final Value value = ((Jump) terminator.data).compute(constantInput);
+				final Map<PortId, Value> values = calee.getBlock().compute(constantInput);
+				for (final Entry<PortId, Value> entry : values.entrySet()) {
+					final Value value = entry.getValue();
 					if (value.isConstant()) {
-						// TODO inline function call
+						node.getOutput(entry.getKey()).replaceWith(Node.constant(value.getType(), value.getConstant()));
 					}
-				} else {
-					throw new IllegalStateException("Unsupported node: " + terminator);
 				}
 			}
 		}

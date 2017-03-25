@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import bdc.Type.FieldType;
+
 class Node implements InputNode, OutputNode {
 
 	static int nextId = 0;
@@ -186,7 +188,7 @@ class Node implements InputNode, OutputNode {
 		return new Node(operation, false, 1, null, args).getOutputArg(0);
 	}
 
-	public static OutputPort constant(final Type type, final Object value) {
+	public static OutputPort constant(final FieldType type, final Object value) {
 		return pureOperation(new LoadConstantOperation(type, value));
 	}
 

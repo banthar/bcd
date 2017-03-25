@@ -46,13 +46,22 @@ public class ProgramTransformationsTest {
 		return identity2(0);
 	}
 
+	private static int sum(final int a, final int b) {
+		return a + b;
+	}
+
+	@MethodReturnsConstant
+	public static int inline_pure_function() {
+		return sum(2, 5);
+	}
+
 	private static int max(final int a, final int b) {
 		return a > b ? a : b;
 	}
 
 	@MethodReturnsConstant
 	public static int inline_pure_function_with_branch() {
-		return max(0, 1);
+		return max(-10, 10);
 	}
 
 	private static int switch_over_arg(final int a) {

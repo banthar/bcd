@@ -12,6 +12,11 @@ public class JumpTable extends Jump {
 		this.lookupTable = lookupTable;
 	}
 
+	@Override
+	public Value compute(final Map<PortId, ? extends Value> input) {
+		throw new IllegalStateException();
+	}
+
 	public int compute(final Object index) {
 		return this.lookupTable.getOrDefault(index, this.defaultOffset);
 	}

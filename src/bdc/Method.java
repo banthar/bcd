@@ -138,7 +138,6 @@ public class Method {
 		if (!this.block.jumpsOut.isEmpty()) {
 			throw new AssertionError("Expected straight return not: " + this.block.terminator);
 		}
-		System.out.println(this.block.terminator.getAllInputPorts());
 		if (this.block.terminator.getAllInputPorts().size() != 2) {
 			throw new IllegalStateException("Terminator node should have exactly one input: " + this.block.terminator
 					+ ": " + this.block.terminator.getAllInputPorts());

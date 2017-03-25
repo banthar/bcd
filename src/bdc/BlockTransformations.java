@@ -112,7 +112,6 @@ public class BlockTransformations {
 				for (final BasicBlockBuilder target : startBlock.jumpsOut) {
 					usedPorts.addAll(target.inputNode.getAllOutputPorts().keySet());
 				}
-				System.out.println(usedPorts + "  " + startBlock.terminator.getAllInputPorts().keySet());
 				for (final Entry<PortId, ? extends InputPort> entry : new ArrayList<>(
 						startBlock.terminator.getAllInputPorts().entrySet())) {
 					if (!usedPorts.contains(entry.getKey())) {
@@ -257,6 +256,8 @@ public class BlockTransformations {
 			return source;
 		} else if (source.getNode().getData() instanceof LoadConstantOperation) {
 			return source;
+		} else if (source.getNode().getData() instanceof PureOperation) {
+			return null;
 		} else {
 			throw new IllegalStateException("Unsupported node type: " + source.getNode());
 		}

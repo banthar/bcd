@@ -5,21 +5,22 @@ import java.util.Map;
 import bdc.BasicBlockBuilder.BinaryOperationType;
 import bdc.BasicBlockBuilder.BitwiseOperationType;
 import bdc.BasicBlockBuilder.ShiftType;
+import bdc.Type.FieldType;
 import bdc.Type.PrimitiveType;
 
 public class PureOperation implements NodeOperation {
 
-	private final Type type;
+	private final FieldType type;
 	private final int inputPorts;
 	private final Object operation;
 
-	public PureOperation(final Type type, final int inputPorts, final Object operation) {
+	public PureOperation(final FieldType type, final int inputPorts, final Object operation) {
 		this.type = type;
 		this.inputPorts = inputPorts;
 		this.operation = operation;
 	}
 
-	public PureOperation(final Type type, final int inputPorts) {
+	public PureOperation(final FieldType type, final int inputPorts) {
 		this(type, inputPorts, null);
 	}
 
@@ -27,7 +28,7 @@ public class PureOperation implements NodeOperation {
 		return this.inputPorts;
 	}
 
-	public Type getType() {
+	public FieldType getType() {
 		return this.type;
 	}
 
@@ -101,7 +102,7 @@ public class PureOperation implements NodeOperation {
 		throw new IllegalStateException("Invalid operation: " + this.operation);
 	}
 
-	public Type getReturnType() {
+	public FieldType getReturnType() {
 		// TODO
 		return getType();
 	}

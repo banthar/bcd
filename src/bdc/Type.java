@@ -398,12 +398,12 @@ public interface Type {
 		return getUnknown();
 	}
 
-	static Type string() {
-		try {
-			return fromDescriptor("Ljava/lang/String;");
-		} catch (final ClassFormatException e) {
-			throw new IllegalStateException();
-		}
+	static FieldType string() {
+		return fromJavaClass(String.class);
+	}
+
+	static FieldType integer() {
+		return fromJavaClass(int.class);
 	}
 
 	static FieldType fromJavaClass(final java.lang.Class<?> type) {
@@ -417,4 +417,5 @@ public interface Type {
 	static String getRuntimeClassName(final java.lang.Class<?> type) {
 		return type.getName().replace('.', '/');
 	}
+
 }
