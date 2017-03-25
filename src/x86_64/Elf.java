@@ -1,6 +1,7 @@
 package x86_64;
 
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -66,7 +67,9 @@ public class Elf {
 	}
 
 	public static void main(final String[] args) throws Exception {
-		try (DataOutputStream out = new DataOutputStream(new FileOutputStream("a.out"))) {
+		final File file = new File("a.out");
+		try (DataOutputStream out = new DataOutputStream(new FileOutputStream(file))) {
+			file.setExecutable(true);
 			new Elf().write(out, true, true,
 					new byte[] { (byte) 0xB8, 0x3C, 0x00, 0x00, 0x00, 0x31, (byte) 0xFF, 0x0F, 0x05 });
 		}
