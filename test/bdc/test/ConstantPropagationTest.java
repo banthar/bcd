@@ -299,6 +299,60 @@ public class ConstantPropagationTest {
 	}
 
 	@MethodReturnsConstant
+	public static boolean compare_float_eq() {
+		float a;
+		float b;
+		a = 0;
+		b = 1;
+		return a == b;
+	}
+
+	@MethodReturnsConstant
+	public static boolean compare_float_ge() {
+		float a;
+		float b;
+		a = 0;
+		b = 1;
+		return a >= b;
+	}
+
+	@MethodReturnsConstant
+	public static boolean compare_float_gt() {
+		float a;
+		float b;
+		a = 0;
+		b = 1;
+		return a > b;
+	}
+
+	@MethodReturnsConstant
+	public static boolean compare_float_le() {
+		float a;
+		float b;
+		a = 0;
+		b = 1;
+		return a <= b;
+	}
+
+	@MethodReturnsConstant
+	public static boolean compare_float_lt() {
+		float a;
+		float b;
+		a = 0;
+		b = 1;
+		return a < b;
+	}
+
+	@MethodReturnsConstant
+	public static boolean compare_float_ne() {
+		float a;
+		float b;
+		a = 0;
+		b = 1;
+		return a != b;
+	}
+
+	@MethodReturnsConstant
 	public static boolean compare_eq() {
 		int a;
 		int b;

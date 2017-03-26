@@ -9,7 +9,7 @@ public class LoadConstantOperation extends PureOperation {
 	private final Object value;
 
 	public LoadConstantOperation(final FieldType type, final Object value) {
-		super(type, 0);
+		super(type);
 		this.value = value;
 	}
 

@@ -23,7 +23,7 @@ import bdc.Type.PrimitiveType;
 
 public class BasicBlockBuilder {
 
-	enum BinaryOperationType {
+	enum BinaryOperationType implements PureTransformationType {
 		Add("+"), Subtract("-"), Multiply("*"), Divide("/"), Remainder("%");
 		private final String symbol;
 
@@ -40,7 +40,7 @@ public class BasicBlockBuilder {
 		}
 	}
 
-	enum ShiftType {
+	enum ShiftType implements PureTransformationType {
 		Left, Arithmetic, Logical;
 
 		public static ShiftType fromId(final int id) {
@@ -48,14 +48,14 @@ public class BasicBlockBuilder {
 		}
 	}
 
-	enum BitwiseOperationType {
+	enum BitwiseOperationType implements PureTransformationType {
 		And, Or, Xor;
 		public static BitwiseOperationType fromId(final int id) {
 			return values()[id];
 		}
 	}
 
-	enum CompareType {
+	enum CompareType implements PureTransformationType {
 		EQ, NE, LT, GE, GT, LE;
 
 		public static CompareType fromId(final int id) {
@@ -131,35 +131,35 @@ public class BasicBlockBuilder {
 		return constant(Type.string(), value);
 	}
 
-	private OutputPort pureOperation(final PureOperation operation, final OutputPort... args) {
+	private OutputPort pureOperation(final PureTransformation operation, final OutputPort... args) {
 		return Node.pureOperation(operation, args);
 	}
 
 	public OutputPort binaryOperation(final PrimitiveType type, final BinaryOperationType op, final OutputPort left,
 			final OutputPort right) {
-		return pureOperation(PureOperation.binaryOperation(type, op), left, right);
+		return pureOperation(PureTransformation.binaryOperation(type, op), left, right);
 	}
 
 	public OutputPort negate(final PrimitiveType type, final OutputPort value) {
-		return pureOperation(PureOperation.negate(type), value);
+		return pureOperation(PureTransformation.negate(type), value);
 	}
 
 	public OutputPort shift(final PrimitiveType type, final ShiftType shiftType, final OutputPort left,
 			final OutputPort right) {
-		return pureOperation(PureOperation.shift(type, shiftType), left, right);
+		return pureOperation(PureTransformation.shift(type, shiftType), left, right);
 	}
 
 	public OutputPort bitwiseOperation(final PrimitiveType type, final BitwiseOperationType operation,
 			final OutputPort left, final OutputPort right) {
-		return pureOperation(PureOperation.bitwiseOperation(type, operation), left, right);
+		return pureOperation(PureTransformation.bitwiseOperation(type, operation), left, right);
 	}
 
 	public OutputPort convert(final PrimitiveType from, final PrimitiveType to, final OutputPort value) {
-		return pureOperation(PureOperation.convert(from, to), value);
+		return pureOperation(PureTransformation.convert(from, to), value);
 	}
 
-	public OutputPort compare(final PrimitiveType type, final OutputPort left, final OutputPort right) {
-		return pureOperation(PureOperation.compare(type), left, right);
+	public OutputPort compare(final PrimitiveType type, final OutputPort right, final OutputPort left) {
+		return pureOperation(PureTransformation.compare(type), left, right);
 	}
 
 	public OutputPort loadElement(final PrimitiveType elementType, final OutputPort arrayref, final OutputPort index) {

@@ -95,8 +95,8 @@ public class ProgramTransformations {
 				block.simplifyJump(block.getTarget(n));
 				blocksRemoved = true;
 			}
-		} else if (node.getData() instanceof PureOperation && !(node.getData() instanceof LoadConstantOperation)) {
-			final PureOperation operation = (PureOperation) node.getData();
+		} else if (node.getData() instanceof PureTransformation && !(node.getData() instanceof LoadConstantOperation)) {
+			final PureTransformation operation = (PureTransformation) node.getData();
 			final Map<PortId, ? extends Value> output = operation.compute(constantInput);
 			if (output.size() != 1) {
 				throw new IllegalStateException();

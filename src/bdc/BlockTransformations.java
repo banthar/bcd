@@ -245,7 +245,7 @@ public class BlockTransformations {
 			return source;
 		} else if (source.getNode().getData() instanceof LoadConstantOperation) {
 			return source;
-		} else if (source.getNode().getData() instanceof PureOperation) {
+		} else if (source.getNode().getData() instanceof PureTransformation) {
 			return null;
 		} else {
 			throw new IllegalStateException("Unsupported node type: " + source.getNode());
