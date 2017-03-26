@@ -200,7 +200,9 @@ public class InstructionParser {
 				case 0x34:
 				case 0x35: {
 					final int n = opcode - 0x2e;
-					block.push(block.loadElement(PrimitiveType.fromId(n), block.pop(), block.pop()));
+					final OutputPort index = block.pop();
+					final OutputPort arrayHandle = block.pop();
+					block.push(block.extractElement(PrimitiveType.fromId(n), block.loadHeap(arrayHandle), index));
 					break;
 				}
 				case 0x36:
@@ -244,9 +246,15 @@ public class InstructionParser {
 				case 0x53:
 				case 0x54:
 				case 0x55:
-				case 0x56:
-					block.storeElement(block.pop(), block.pop(), block.pop());
+				case 0x56: {
+					final int n = opcode - 0x4f;
+					final OutputPort value = block.pop();
+					final OutputPort index = block.pop();
+					final OutputPort arrayRef = block.pop();
+					block.storeHeap(arrayRef,
+							block.insertElement(PrimitiveType.fromId(n), block.loadHeap(arrayRef), index, value));
 					break;
+				}
 				case 0x57:
 					block.pop();
 					break;
@@ -576,16 +584,16 @@ public class InstructionParser {
 					break;
 				case 0xbc: {
 					final PrimitiveType type = PrimitiveType.fromArrayTypeId(getUnsignedByte(in));
-					block.push(block.newPrimitiveArray(type, block.pop()));
+					block.push(block.allocHeap(block.newPrimitiveArray(type, block.pop())));
 					break;
 				}
 				case 0xbd: {
 					final ClassReference type = constantPool.getClassReference(getUnsignedShort(in));
-					block.push(block.newArray(type, block.pop()));
+					block.push(block.allocHeap(block.newArray(type, block.pop())));
 					break;
 				}
 				case 0xbe: {
-					block.push(block.arrayLength(block.pop()));
+					block.push(block.arrayLength(block.loadHeap(block.pop())));
 					break;
 				}
 				case 0xbf: {

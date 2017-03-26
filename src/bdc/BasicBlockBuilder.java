@@ -92,6 +92,20 @@ public class BasicBlockBuilder {
 		return operation.getOutputArg(0);
 	}
 
+	public OutputPort allocHeap(final OutputPort intialValue) {
+		final Node operation = new Node(new AllocHeap(), true, 1, this.environment, intialValue);
+		this.environment = operation.getOutputEnvironment();
+		return operation.getOutputArg(0);
+	}
+
+	public OutputPort loadHeap(final OutputPort handle) {
+		return new Node(new LoadHeap(), false, 1, this.environment, handle).getOutputArg(0);
+	}
+
+	public void storeHeap(final OutputPort handle, final OutputPort value) {
+		this.environment = new Node(new StoreHeap(), true, 0, this.environment, handle, value).getOutputEnvironment();
+	}
+
 	public OutputPort pop() {
 		final Node operation = new Node(new Pop(), true, 1, this.environment);
 		this.environment = operation.getOutputEnvironment();
@@ -162,16 +176,14 @@ public class BasicBlockBuilder {
 		return pureOperation(PureTransformation.compare(type), left, right);
 	}
 
-	public OutputPort loadElement(final PrimitiveType elementType, final OutputPort arrayref, final OutputPort index) {
-		final Node operation = new Node(Arrays.asList("load_element", elementType), false, 1, this.environment,
-				arrayref, index);
-		return operation.getOutputArg(0);
+	public OutputPort extractElement(final PrimitiveType elementType, final OutputPort arrayref,
+			final OutputPort index) {
+		return new Node(new ExtractElement(elementType), false, 1, null, arrayref, index).getOutputArg(0);
 	}
 
-	public void storeElement(final OutputPort arrayref, final OutputPort index, final OutputPort value) {
-		final Node operation = new Node(Arrays.asList("store_element"), true, 0, this.environment, arrayref, index,
-				value);
-		this.environment = operation.getOutputEnvironment();
+	public OutputPort insertElement(final PrimitiveType elementType, final OutputPort array, final OutputPort index,
+			final OutputPort value) {
+		return new Node(new InsertElement(elementType), false, 1, null, array, index, value).getOutputArg(0);
 	}
 
 	public OutputPort checkedCast(final ClassReference type, final OutputPort value) {
@@ -261,27 +273,23 @@ public class BasicBlockBuilder {
 		return operation.getOutputArg(0);
 	}
 
-	public OutputPort newPrimitiveArray(final PrimitiveType type, final OutputPort size) {
-		final Node operation = new Node(Arrays.asList("new_primitive_array", type), true, 1, this.environment, size);
-		this.environment = operation.getOutputEnvironment();
+	public OutputPort newPrimitiveArray(final PrimitiveType elementType, final OutputPort size) {
+		final Node operation = new Node(new CreateArray(elementType), false, 1, null, size);
 		return operation.getOutputArg(0);
 	}
 
 	public OutputPort newArray(final ClassReference type, final OutputPort size) {
-		final Node operation = new Node(Arrays.asList("new_array", type), true, 2, this.environment, size);
-		this.environment = operation.getOutputEnvironment();
+		final Node operation = new Node(new CreateArray(type.getType()), false, 1, null, size);
 		return operation.getOutputArg(0);
 
 	}
 
 	public OutputPort arrayLength(final OutputPort array) {
-		final Node operation = new Node(Arrays.asList("array_length"), false, 1, this.environment, array);
-		return operation.getOutputArg(0);
+		return new Node(new ArrayLength(), false, 1, null, array).getOutputArg(0);
 	}
 
 	public void returnValue(final PrimitiveType type, final OutputPort ref) {
 		terminate(Node.terminator(new ReturnValues(type), this.environment, ref));
-
 	}
 
 	public void returnVoid() {

@@ -406,6 +406,10 @@ public interface Type {
 		return fromJavaClass(int.class);
 	}
 
+	static ArrayType array(final FieldType elementType) {
+		return new ArrayType(elementType);
+	}
+
 	static FieldType fromJavaClass(final java.lang.Class<?> type) {
 		if (type.isPrimitive()) {
 			return PrimitiveType.fromJavaType(type);
