@@ -168,8 +168,9 @@ public class BasicBlockBuilder {
 		return operation.getOutputArg(0);
 	}
 
-	public void storeElement(final OutputPort arrayref, final OutputPort index) {
-		final Node operation = new Node(Arrays.asList("store_element"), true, 0, this.environment, arrayref, index);
+	public void storeElement(final OutputPort arrayref, final OutputPort index, final OutputPort value) {
+		final Node operation = new Node(Arrays.asList("store_element"), true, 0, this.environment, arrayref, index,
+				value);
 		this.environment = operation.getOutputEnvironment();
 	}
 
@@ -261,7 +262,7 @@ public class BasicBlockBuilder {
 	}
 
 	public OutputPort newPrimitiveArray(final PrimitiveType type, final OutputPort size) {
-		final Node operation = new Node(Arrays.asList("new_primitive_array", type), true, 2, this.environment, size);
+		final Node operation = new Node(Arrays.asList("new_primitive_array", type), true, 1, this.environment, size);
 		this.environment = operation.getOutputEnvironment();
 		return operation.getOutputArg(0);
 	}

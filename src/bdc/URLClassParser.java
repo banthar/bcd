@@ -11,6 +11,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,12 +20,16 @@ import bdc.ConstantPool.ClassReference;
 
 public class URLClassParser {
 
-	private final URL[] urls;
+	private final List<URL> urls;
 
 	private final Map<String, Class> cache = new HashMap<>();
 
-	public URLClassParser(final URL[] urls) {
+	public URLClassParser(final List<URL> urls) {
 		this.urls = urls;
+	}
+
+	public URLClassParser(final URL[] urls) {
+		this(Arrays.asList(urls));
 	}
 
 	public Class loadClass(final String name) throws IOException, ClassFormatException, ClassNotFoundException {
@@ -34,8 +39,7 @@ public class URLClassParser {
 		}
 		try {
 			for (final URL url : this.urls) {
-				final URI absoluteURI = url.toURI()
-						.resolve(new URI(null, null, name.replace('.', '/') + ".class", null));
+				final URI absoluteURI = new URI(url + name.replace('.', '/') + ".class");
 				try (InputStream input = absoluteURI.toURL().openStream()) {
 					final DataInputStream dataInput = new DataInputStream(input);
 					final Class parsedClass = parseClass(dataInput);

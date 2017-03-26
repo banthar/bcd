@@ -1,7 +1,6 @@
 package bdc;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -194,8 +193,9 @@ public class BlockTransformations {
 	}
 
 	public static Map<PortId, PortId> removeDirectOutputs(final BasicBlockBuilder init) {
+		final Iterable<? extends PortId> returnedPorts = ((MethodInit) init.inputNode.getData()).getReturnedPorts();
 		final Map<PortId, PortId> portsToInline = new HashMap<>();
-		for (final PortId portId : Arrays.asList(PortId.environment(), PortId.arg(0))) {
+		for (final PortId portId : returnedPorts) {
 			final List<Node> terminators = new ArrayList<>();
 			OutputPort commonSource = null;
 			for (final BasicBlockBuilder block : init.getAllLinkedBlocks()) {

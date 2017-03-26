@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.PrintStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
@@ -85,7 +86,14 @@ public class BdcRunner extends Runner implements Filterable {
 	}
 
 	public void runTest(final String name, final String signature, final Object expectedValue) throws Exception {
-		final URLClassParser loader = new URLClassParser(new URL[] { this.testClass.getResource("/") });
+		final List<URL> urls = new ArrayList<>();
+		for (final String path : System.getProperty("sun.boot.class.path").split(File.pathSeparator)) {
+			urls.add(createURL(path));
+		}
+		for (final String path : System.getProperty("java.class.path").split(File.pathSeparator)) {
+			urls.add(createURL(path));
+		}
+		final URLClassParser loader = new URLClassParser(urls);
 		final bdc.Class type = loader.loadClass(this.testClass.getName());
 		final bdc.Method m = type.getMethod(name, signature);
 		try {
@@ -107,6 +115,15 @@ public class BdcRunner extends Runner implements Filterable {
 				throw e;
 			}
 			throw e;
+		}
+	}
+
+	private URL createURL(final String path) throws Exception {
+		final File file = new File(path);
+		if (file.isDirectory()) {
+			return file.getAbsoluteFile().toURI().toURL();
+		} else {
+			return new URI("jar", file.getAbsoluteFile().toURI().toString() + "!/", null).toURL();
 		}
 	}
 

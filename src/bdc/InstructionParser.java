@@ -245,7 +245,7 @@ public class InstructionParser {
 				case 0x54:
 				case 0x55:
 				case 0x56:
-					block.storeElement(block.pop(), block.pop());
+					block.storeElement(block.pop(), block.pop(), block.pop());
 					break;
 				case 0x57:
 					block.pop();
