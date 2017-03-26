@@ -1,5 +1,6 @@
 package bdc;
 
+import java.util.Collections;
 import java.util.Map;
 
 import bdc.BasicBlockBuilder.BinaryOperationType;
@@ -61,7 +62,11 @@ public class PureOperation implements NodeOperation {
 		return "PureOperation(" + this.type + ", " + this.inputPorts + ", " + this.operation + ")";
 	}
 
-	public Value compute(final Map<PortId, ? extends Value> values) {
+	public Map<PortId, ? extends Value> compute(final Map<PortId, ? extends Value> values) {
+		return Collections.singletonMap(PortId.arg(0), computeSingleOutput(values));
+	}
+
+	protected Value computeSingleOutput(final Map<PortId, ? extends Value> values) {
 		if (values.size() != this.inputPorts) {
 			throw new IllegalStateException();
 		}

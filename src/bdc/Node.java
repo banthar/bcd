@@ -70,6 +70,7 @@ class Node implements InputNode, OutputNode {
 	}
 
 	private void getAllLinkedNodes(final Set<Node> nodes) {
+		nodes.add(this);
 		for (final OutputPort port : getAllOutputPorts().values()) {
 			for (final InputPort targetPort : port.getTargets()) {
 				final Node targetNode = targetPort.getNode();

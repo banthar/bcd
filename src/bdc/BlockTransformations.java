@@ -114,7 +114,7 @@ public class BlockTransformations {
 				}
 				for (final Entry<PortId, ? extends InputPort> entry : new ArrayList<>(
 						startBlock.terminator.getAllInputPorts().entrySet())) {
-					if (!usedPorts.contains(entry.getKey())) {
+					if (!usedPorts.contains(entry.getKey()) && entry.getKey().type != PortType.ARG) {
 						startBlock.terminator.removeInput(entry.getKey());
 					}
 				}
@@ -212,7 +212,7 @@ public class BlockTransformations {
 				}
 			}
 			if (commonSource != null && commonSource.getNode() == init.inputNode) {
-				portsToInline.put(portId, calleToCallerPort(commonSource.getPortId()));
+				portsToInline.put(portId, Method.calleToCallerPort(commonSource.getPortId()));
 				for (final Node terminator : terminators) {
 					terminator.removeInput(portId);
 				}
@@ -221,17 +221,6 @@ public class BlockTransformations {
 		removeUnusedInterBlockPorts(init, new HashSet<>());
 		removeExtraBlockPorts(init, new HashSet<>());
 		return portsToInline;
-	}
-
-	private static PortId calleToCallerPort(final PortId portId) {
-		switch (portId.type) {
-		case ENV:
-			return portId;
-		case LOCAL:
-			return PortId.arg(portId.index);
-		default:
-			throw new IllegalStateException("Invalid callee argument port: " + portId);
-		}
 	}
 
 	private static boolean isEqual(final OutputPort commonPort, final OutputPort source) {
@@ -274,7 +263,7 @@ public class BlockTransformations {
 			final OutputPort port = entry.getValue();
 			if (port.getTargets().isEmpty()) {
 				iterator.remove();
-				removedPorts.add(calleToCallerPort(id));
+				removedPorts.add(Method.calleToCallerPort(id));
 			}
 		}
 		return removedPorts;

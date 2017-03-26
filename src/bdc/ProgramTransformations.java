@@ -97,7 +97,11 @@ public class ProgramTransformations {
 			}
 		} else if (node.getData() instanceof PureOperation && !(node.getData() instanceof LoadConstantOperation)) {
 			final PureOperation operation = (PureOperation) node.getData();
-			final Value computedValue = operation.compute(constantInput);
+			final Map<PortId, ? extends Value> output = operation.compute(constantInput);
+			if (output.size() != 1) {
+				throw new IllegalStateException();
+			}
+			final Value computedValue = output.get(PortId.arg(0));
 			if (computedValue.isConstant()) {
 				node.getOutput(PortId.arg(0))
 						.replaceWith(Node.constant(operation.getReturnType(), computedValue.getConstant()));
@@ -105,7 +109,11 @@ public class ProgramTransformations {
 		} else if (node.getData() instanceof Method) {
 			if (constantInput != null) {
 				final Method calee = (Method) node.getData();
-				final Map<PortId, Value> values = calee.getBlock().compute(constantInput);
+				final Map<PortId, Value> methodInput = new HashMap<>();
+				for (final Entry<PortId, Value> entry : constantInput.entrySet()) {
+					methodInput.put(calee.callerToCalleePort(entry.getKey()), entry.getValue());
+				}
+				final Map<PortId, Value> values = calee.getBlock().compute(methodInput);
 				for (final Entry<PortId, Value> entry : values.entrySet()) {
 					final Value value = entry.getValue();
 					if (value.isConstant()) {

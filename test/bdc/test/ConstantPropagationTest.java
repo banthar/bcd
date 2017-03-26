@@ -124,11 +124,6 @@ public class ConstantPropagationTest {
 	}
 
 	@MethodReturnsConstant
-	public static int subtract_self(final int a) {
-		return a - a;
-	}
-
-	@MethodReturnsConstant
 	public static int remove_local_used_in_dead_right_branch() {
 		int a;
 		int b;
@@ -302,4 +297,59 @@ public class ConstantPropagationTest {
 		}
 		return 3;
 	}
+
+	@MethodReturnsConstant
+	public static boolean compare_eq() {
+		int a;
+		int b;
+		a = 0;
+		b = 1;
+		return a == b;
+	}
+
+	@MethodReturnsConstant
+	public static boolean compare_ge() {
+		int a;
+		int b;
+		a = 0;
+		b = 1;
+		return a >= b;
+	}
+
+	@MethodReturnsConstant
+	public static boolean compare_gt() {
+		int a;
+		int b;
+		a = 0;
+		b = 1;
+		return a > b;
+	}
+
+	@MethodReturnsConstant
+	public static boolean compare_le() {
+		int a;
+		int b;
+		a = 0;
+		b = 1;
+		return a <= b;
+	}
+
+	@MethodReturnsConstant
+	public static boolean compare_lt() {
+		int a;
+		int b;
+		a = 0;
+		b = 1;
+		return a < b;
+	}
+
+	@MethodReturnsConstant
+	public static boolean compare_ne() {
+		int a;
+		int b;
+		a = 0;
+		b = 1;
+		return a != b;
+	}
+
 }

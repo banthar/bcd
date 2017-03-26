@@ -14,7 +14,12 @@ public class JumpTable extends Jump {
 
 	@Override
 	public Value compute(final Map<PortId, ? extends Value> input) {
-		throw new IllegalStateException();
+		final Value value = input.get(PortId.arg(0));
+		if (value.isConstant()) {
+			return Value.integer(compute(value.getConstant()));
+		} else {
+			return Value.unknown();
+		}
 	}
 
 	public int compute(final Object index) {

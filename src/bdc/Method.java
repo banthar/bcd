@@ -196,4 +196,26 @@ public class Method {
 		return this.callers;
 	}
 
+	public static PortId calleToCallerPort(final PortId portId) {
+		switch (portId.type) {
+		case ENV:
+			return portId;
+		case LOCAL:
+			return PortId.arg(portId.index);
+		default:
+			throw new IllegalStateException("Invalid callee argument port: " + portId);
+		}
+	}
+
+	public PortId callerToCalleePort(final PortId portId) {
+		switch (portId.type) {
+		case ENV:
+			return portId;
+		case ARG:
+			return PortId.local(portId.index);
+		default:
+			throw new IllegalStateException("Invalid callee argument port: " + portId);
+		}
+	}
+
 }

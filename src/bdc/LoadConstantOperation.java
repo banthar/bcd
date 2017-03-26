@@ -1,5 +1,7 @@
 package bdc;
 
+import java.util.Map;
+
 import bdc.Type.FieldType;
 
 public class LoadConstantOperation extends PureOperation {
@@ -22,6 +24,14 @@ public class LoadConstantOperation extends PureOperation {
 
 	public Value toValue() {
 		return Value.of(getType(), this.value);
+	}
+
+	@Override
+	protected Value computeSingleOutput(final Map<PortId, ? extends Value> values) {
+		if (!values.isEmpty()) {
+			throw new IllegalStateException("Expected no arguments: " + values);
+		}
+		return toValue();
 	}
 
 }

@@ -521,35 +521,41 @@ public class BasicBlockBuilder {
 		return block;
 	}
 
-	public Map<PortId, Value> compute(final Map<PortId, Value> constantInput) {
-		if (this.terminator.getData() instanceof ReturnValues) {
-			if (!this.terminator.getAllInputPorts().keySet().equals(Collections.singleton(PortId.arg(0)))) {
+	private Map<PortId, Value> compute(final Map<OutputPort, Value> computedValues, final Node node) {
+		final Map<PortId, Value> input = new HashMap<>();
+		for (final Entry<PortId, ? extends InputPort> entry : node.getAllInputPorts().entrySet()) {
+			final OutputPort source = entry.getValue().getSource();
+			if (!computedValues.containsKey(source)) {
+				compute(computedValues, source.getNode());
+			}
+			input.put(entry.getKey(), computedValues.get(source));
+		}
+		if (node.getData() instanceof PureOperation) {
+			final Map<PortId, ? extends Value> output = ((PureOperation) node.getData()).compute(input);
+			for (final Entry<PortId, ? extends OutputPort> entry : node.getAllOutputPorts().entrySet()) {
+				computedValues.put(entry.getValue(), output.get(entry.getKey()));
+			}
+			return null;
+		} else if (node.getData() instanceof ReturnValues) {
+			return input;
+		} else if (node.getData() instanceof Jump) {
+			final Value branch = ((Jump) node.getData()).compute(input);
+			if (branch.isConstant()) {
+				final int targetIndex = ((Integer) branch.getConstant()).intValue();
+				return getTarget(targetIndex).compute(input);
+			} else {
 				throw new IllegalStateException();
 			}
-			final OutputPort source = this.terminator.getInput(PortId.arg(0)).getSource();
-			if (source.getNode().getData() instanceof LoadConstantOperation) {
-				final LoadConstantOperation constant = (LoadConstantOperation) source.getNode().getData();
-				final Map<PortId, Value> values = new HashMap<>();
-				values.put(PortId.arg(0), constant.toValue());
-				return values;
-			} else if (source.getNode().getData() instanceof PureOperation) {
-				System.out.println(source.getNode().getAllInputPorts());
-				System.out.println(source.getNode().getAllOutputPorts());
-				throw new IllegalStateException(constantInput + " " + source.getNode().getAllInputPorts());
-			} else {
-				throw new IllegalStateException("Unsupported node: " + source.getNode());
-			}
-		} else if (this.terminator.getData() instanceof Jump) {
-			final Value value = ((Jump) this.terminator.data).compute(constantInput);
-			if (value.isConstant()) {
-				final Map<PortId, Value> values = new HashMap<>();
-				values.put(PortId.arg(0), value);
-				return values;
-			}
 		} else {
-			throw new IllegalStateException("Unsupported node: " + this.terminator);
+			throw new IllegalStateException("Unsupported node: " + node.getData());
 		}
-		return Collections.emptyMap();
 	}
 
+	public Map<PortId, Value> compute(final Map<PortId, Value> constantInput) {
+		final Map<OutputPort, Value> computedValues = new HashMap<>();
+		for (final Entry<PortId, Value> entry : constantInput.entrySet()) {
+			computedValues.put(this.inputNode.getOutput(entry.getKey()), entry.getValue());
+		}
+		return compute(computedValues, this.terminator);
+	}
 }

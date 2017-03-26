@@ -441,7 +441,9 @@ public class InstructionParser {
 					final CompareType compareType = BasicBlockBuilder.CompareType.fromId(opcode - 0x9f);
 					final BasicBlockBuilder then = getBlock.apply(in.getShort() + opcodeOffset);
 					final BasicBlockBuilder otherwise = getBlock.apply(in.position());
-					block.jumpIf(PrimitiveType.Integer, then, otherwise, compareType, block.pop(), block.pop());
+					final OutputPort right = block.pop();
+					final OutputPort left = block.pop();
+					block.jumpIf(PrimitiveType.Integer, then, otherwise, compareType, left, right);
 					break;
 				}
 				case 0xa5:
