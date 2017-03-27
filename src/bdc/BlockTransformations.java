@@ -14,6 +14,12 @@ import bdc.PortId.PortType;
 
 public class BlockTransformations {
 
+	public static void optimizeBlock(final BasicBlockBuilder block) {
+		BlockTransformations.removeDirectJumps(block);
+		BlockTransformations.removeDirectStackWrites(block);
+		BlockTransformations.removeUnnecessaryHeapAllocations(block);
+	}
+
 	public static void removeDirectJumps(final BasicBlockBuilder block) {
 		removeDirectJumps(block, new HashSet<>());
 	}
@@ -267,5 +273,64 @@ public class BlockTransformations {
 			}
 		}
 		return removedPorts;
+	}
+
+	public static void removeUnnecessaryHeapAllocations(final BasicBlockBuilder block) {
+		removeUnnecessaryHeapAllocations(block, block.inputNode, Collections.emptyMap());
+	}
+
+	private static void removeUnnecessaryHeapAllocations(final BasicBlockBuilder block, final Node node,
+			final Map<OutputPort, OutputPort> values) {
+		final Map<OutputPort, OutputPort> newValues = new HashMap<>(values);
+		if (node.getData() instanceof AllocHeap) {
+			final OutputPort handle = node.getOutput(PortId.arg(0));
+			final OutputPort value = node.getInput(PortId.arg(0)).getSource();
+			newValues.put(handle, value);
+		} else if (node.getData() instanceof StoreHeap) {
+			final OutputPort handle = node.getInput(PortId.arg(0)).getSource();
+			final OutputPort value = node.getInput(PortId.arg(1)).getSource();
+			newValues.put(handle, value);
+		} else if (node.getData() instanceof LoadHeap) {
+			final OutputPort handle = node.getInput(PortId.arg(0)).getSource();
+			final OutputPort value = newValues.get(handle);
+			if (value != null) {
+				node.getOutput(PortId.arg(0)).replaceWith(value);
+				node.unlinkInput();
+			}
+		}
+
+		final Set<? extends InputPort> targets;
+		if (node.getOutputEnvironment() != null) {
+			targets = node.getOutputEnvironment().getTargets();
+		} else {
+			targets = Collections.emptySet();
+		}
+		for (final InputPort port : targets) {
+			removeUnnecessaryHeapAllocations(block, port.getNode(), newValues);
+		}
+
+		if (node.getData() instanceof AllocHeap) {
+			boolean writeOnly = true;
+			for (final InputPort targetPort : node.getOutput(PortId.arg(0)).getTargets()) {
+				if (!(targetPort.getNode().getData() instanceof StoreHeap)) {
+					writeOnly = false;
+				}
+			}
+			if (writeOnly) {
+				node.getInput(PortId.arg(0)).unlink();
+				node.getOutput(PortId.environment()).replaceWith(node.getInput(PortId.environment()).unlink());
+
+				for (final InputPort targetPort : node.getOutput(PortId.arg(0)).getTargets()) {
+					if (!(targetPort.getNode().getData() instanceof StoreHeap)) {
+						throw new IllegalStateException("Unexpected node: " + targetPort.getNode());
+					}
+					final Node targetNode = targetPort.getNode();
+					targetNode.getOutput(PortId.environment())
+							.replaceWith(targetNode.getInput(PortId.environment()).unlink());
+					targetNode.getInput(PortId.arg(0)).unlink();
+					targetNode.getInput(PortId.arg(1)).unlink();
+				}
+			}
+		}
 	}
 }

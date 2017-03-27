@@ -18,7 +18,7 @@ public class JumpTable extends Jump {
 		if (value.isConstant()) {
 			return Value.integer(compute(value.getConstant()));
 		} else {
-			return Value.unknown();
+			return Value.unknown(Type.integer());
 		}
 	}
 

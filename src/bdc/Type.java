@@ -108,6 +108,10 @@ public interface Type {
 			this.elementType = elementType;
 		}
 
+		public FieldType getElementType() {
+			return elementType;
+		}
+
 		@Override
 		public String getJavaName() {
 			return elementType + "[]";
@@ -247,7 +251,7 @@ public interface Type {
 	}
 
 	static Type typeVariable(final String name) {
-		return getUnknown();
+		return unknown();
 	}
 
 	static Type readClassTypeSignature(final CharBuffer buffer) throws ClassFormatException {
@@ -390,12 +394,12 @@ public interface Type {
 		return new ClassFormatException(builder.toString());
 	}
 
-	static FieldType getUnknown() {
+	static FieldType unknown() {
 		return UnknownType.INSTANCE;
 	}
 
 	static Type wildcard() {
-		return getUnknown();
+		return unknown();
 	}
 
 	static FieldType string() {

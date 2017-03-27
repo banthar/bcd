@@ -1,5 +1,6 @@
 package bdc;
 
+import java.util.Arrays;
 import java.util.Map;
 
 import bdc.Type.FieldType;
@@ -19,7 +20,7 @@ public class LoadConstantOperation extends PureOperation {
 
 	@Override
 	public String toString() {
-		return "LoadConstantOperation(" + getType() + ", " + this.value + ")";
+		return "LoadConstantOperation(" + getType() + ", " + Arrays.deepToString(new Object[] { this.value }) + ")";
 	}
 
 	public Value toValue() {

@@ -66,7 +66,7 @@ public class ProgramTransformations {
 				constantInput.put(port.getKey(),
 						Value.of(loadConstantOperation.getType(), loadConstantOperation.getValue()));
 			} else {
-				constantInput.put(port.getKey(), Value.unknown());
+				constantInput.put(port.getKey(), Value.unknown(Type.unknown()));
 			}
 		}
 		if (node.getData() instanceof ConditionalJump) {
@@ -95,8 +95,8 @@ public class ProgramTransformations {
 				block.simplifyJump(block.getTarget(n));
 				blocksRemoved = true;
 			}
-		} else if (node.getData() instanceof PureTransformation && !(node.getData() instanceof LoadConstantOperation)) {
-			final PureTransformation operation = (PureTransformation) node.getData();
+		} else if (node.getData() instanceof PureOperation && !node.getAllInputPorts().isEmpty()) {
+			final PureOperation operation = (PureOperation) node.getData();
 			final Map<PortId, ? extends Value> output = operation.compute(constantInput);
 			if (output.size() != 1) {
 				throw new IllegalStateException();
@@ -104,7 +104,7 @@ public class ProgramTransformations {
 			final Value computedValue = output.get(PortId.arg(0));
 			if (computedValue.isConstant()) {
 				node.getOutput(PortId.arg(0))
-						.replaceWith(Node.constant(operation.getReturnType(), computedValue.getConstant()));
+						.replaceWith(Node.constant(operation.getType(), computedValue.getConstant()));
 			}
 		} else if (node.getData() instanceof Method) {
 			if (constantInput != null) {

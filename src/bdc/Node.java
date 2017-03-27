@@ -62,6 +62,12 @@ class Node implements InputNode, OutputNode {
 		return "node" + this.id;
 	}
 
+	public void unlinkInput() {
+		for (final InputPort input : getAllInputPorts().values()) {
+			input.unlink();
+		}
+	}
+
 	public Set<Node> getAllLinkedNodes() {
 		final Set<Node> nodes = new HashSet<>();
 		getAllLinkedNodes(nodes);
@@ -197,4 +203,5 @@ class Node implements InputNode, OutputNode {
 			final OutputPort... input) {
 		return new Node(operation, false, 0, environment, input);
 	}
+
 }

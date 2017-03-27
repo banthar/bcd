@@ -84,24 +84,24 @@ public class PureTransformation extends PureOperation {
 				if ((Integer) arg0 == 0 && this.operation == BinaryOperationType.Multiply) {
 					return Value.integer(0);
 				} else {
-					return Value.unknown();
+					return Value.unknown(Type.integer());
 				}
 			} else if (value1.isConstant()) {
 				final Object arg1 = value1.getConstant();
 				if ((Integer) arg1 == 0 && this.operation == BinaryOperationType.Multiply) {
 					return Value.integer(0);
 				} else {
-					return Value.unknown();
+					return Value.unknown(Type.integer());
 				}
 			} else {
-				return Value.unknown();
+				return Value.unknown(Type.integer());
 			}
 		} else if (this.operation instanceof Negate) {
 			final Value value0 = values.get(PortId.arg(0));
 			if (value0.isConstant()) {
 				return Value.integer(-(Integer) value0.getConstant());
 			} else {
-				return Value.unknown();
+				return Value.unknown(Type.integer());
 			}
 		} else if (this.operation instanceof Compare) {
 			final Value value0 = values.get(PortId.arg(0));
@@ -111,14 +111,9 @@ public class PureTransformation extends PureOperation {
 				final float arg1 = (Float) value1.getConstant();
 				return Value.integer(Float.compare(arg0, arg1));
 			} else {
-				return Value.unknown();
+				return Value.unknown(Type.integer());
 			}
 		}
 		throw new IllegalStateException("Invalid operation: " + this.operation);
-	}
-
-	public FieldType getReturnType() {
-		// TODO
-		return getType();
 	}
 }

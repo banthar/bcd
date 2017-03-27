@@ -22,7 +22,7 @@ public class ConditionalJump extends Jump {
 		if (left.isConstant() && right.isConstant()) {
 			return Value.integer(compute(left.getConstant(), right.getConstant()));
 		} else {
-			return Value.unknown();
+			return Value.unknown(Type.integer());
 		}
 	}
 

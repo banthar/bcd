@@ -65,8 +65,7 @@ public class Method {
 		if (dataInput.read() != -1) {
 			throw new ClassFormatException("Extra bytes at end of method code");
 		}
-		BlockTransformations.removeDirectJumps(block);
-		BlockTransformations.removeDirectStackWrites(block);
+		BlockTransformations.optimizeBlock(block);
 		this.block = block;
 		resolve();
 	}
@@ -149,8 +148,9 @@ public class Method {
 		final Node sourceNode = this.block.terminator.getInput(PortId.arg(0)).getSource().getNode();
 		if (sourceNode.getData() instanceof LoadConstantOperation) {
 			final LoadConstantOperation data = (LoadConstantOperation) sourceNode.getData();
-			if (data.getType() != getExpectedType(expectedValue)) {
-				throw new IllegalStateException();
+			final Type expectedType = getExpectedType(expectedValue);
+			if (data.getType() != expectedType) {
+				throw new IllegalStateException("Expected type: " + expectedType + " != " + data.getType());
 			}
 			final Object actualValue = data.getValue();
 			if (!isEqual(actualValue, expectedValue)) {

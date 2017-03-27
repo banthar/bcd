@@ -6,13 +6,16 @@ import bdc.Type.FieldType;
 
 public class CreateArray extends PureOperation {
 
+	private final FieldType elementType;
+
 	public CreateArray(final FieldType elementType) {
 		super(Type.array(elementType));
+		this.elementType = elementType;
 	}
 
 	@Override
-	protected Value computeSingleOutput(final Map<PortId, ? extends Value> values) {
-		throw new IllegalStateException();
+	protected ValueArray computeSingleOutput(final Map<PortId, ? extends Value> values) {
+		return Value.array(this.elementType, values.get(PortId.arg(0)));
 	}
 
 }

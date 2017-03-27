@@ -10,6 +10,7 @@ public class ArrayLength extends PureOperation {
 
 	@Override
 	protected Value computeSingleOutput(final Map<PortId, ? extends Value> values) {
-		throw new IllegalStateException();
+		final ValueArray array = (ValueArray) values.get(PortId.arg(0));
+		return array.getLength();
 	}
 }

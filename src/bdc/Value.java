@@ -1,53 +1,54 @@
 package bdc;
 
+import bdc.Type.ArrayType;
 import bdc.Type.FieldType;
 
-public class Value {
+public abstract class Value {
 
-	private final Object value;
 	private final FieldType type;
 	private final boolean isConstant;
 
-	public Value(final FieldType type, final boolean isConstant, final Object value) {
+	public Value(final FieldType type, final boolean isConstant) {
 		this.type = type;
-		this.value = value;
 		this.isConstant = isConstant;
 	}
 
 	public static Value integer(final int n) {
-		return new Value(Type.integer(), true, n);
+		return new ValuePrimitive(Type.integer(), true, n);
 	}
 
-	public static Value unknown() {
-		return new Value(Type.getUnknown(), false, null);
+	public static Value unknown(final FieldType type) {
+		return new Value(type, false) {
+			@Override
+			Object getConstant() {
+				throw new IllegalStateException();
+			}
+		};
 	}
+
+	abstract Object getConstant();
 
 	public boolean isConstant() {
 		return this.isConstant;
 	}
 
-	public Object getConstant() {
-		if (this.isConstant) {
-			return this.value;
-		} else {
-			throw new IllegalStateException();
-		}
-	}
-
 	public static Value of(final FieldType type, final Object value) {
-		return new Value(type, true, value);
-	}
-
-	@Override
-	public String toString() {
-		if (this.isConstant) {
-			return this.value == null ? "null" : this.value.getClass().getSimpleName() + "(" + this.value + ")";
+		if (type instanceof ArrayType) {
+			return new ValueArray(((ArrayType) type).getElementType(), true, (Object[]) value);
 		} else {
-			return "unknown";
+			return new ValuePrimitive(type, true, value);
 		}
 	}
 
 	public FieldType getType() {
 		return this.type;
+	}
+
+	public static ValueArray array(final FieldType elementType, final Value length) {
+		return new ValueArray(elementType, false, length);
+	}
+
+	public int getInt() {
+		return (Integer) getConstant();
 	}
 }
