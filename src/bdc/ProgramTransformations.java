@@ -109,11 +109,7 @@ public class ProgramTransformations {
 		} else if (node.getData() instanceof Method) {
 			if (constantInput != null) {
 				final Method calee = (Method) node.getData();
-				final Map<PortId, Value> methodInput = new HashMap<>();
-				for (final Entry<PortId, Value> entry : constantInput.entrySet()) {
-					methodInput.put(calee.callerToCalleePort(entry.getKey()), entry.getValue());
-				}
-				final Map<PortId, Value> values = calee.getBlock().compute(methodInput);
+				final Map<PortId, Value> values = calee.compute(constantInput);
 				for (final Entry<PortId, Value> entry : values.entrySet()) {
 					final Value value = entry.getValue();
 					if (value.isConstant()) {

@@ -218,15 +218,12 @@ public class BasicBlockBuilder {
 	}
 
 	public OutputPort loadField(final FieldReference fieldReference, final OutputPort target) {
-		final Node operation = new Node(Arrays.asList("load_field", fieldReference), false, 1, this.environment,
-				target);
+		final Node operation = new Node(new LoadField(fieldReference), false, 1, null, target);
 		return operation.getOutputArg(0);
 	}
 
-	public void storeField(final FieldReference fieldReference, final OutputPort target, final OutputPort value) {
-		final Node operation = new Node(Arrays.asList("store_field", fieldReference), true, 1, this.environment, target,
-				value);
-		this.environment = operation.getOutputEnvironment();
+	public OutputPort storeField(final FieldReference fieldReference, final OutputPort target, final OutputPort value) {
+		return new Node(new StoreField(fieldReference), false, 1, null, target, value).getOutputArg(0);
 	}
 
 	public List<OutputPort> invokeVirtual(final MethodReference methodReference, final OutputPort target,
@@ -268,9 +265,7 @@ public class BasicBlockBuilder {
 	}
 
 	public OutputPort newInstance(final ClassReference classReference) {
-		final Node operation = new Node(Arrays.asList("new_instance", classReference), true, 1, this.environment);
-		this.environment = operation.getOutputEnvironment();
-		return operation.getOutputArg(0);
+		return new Node(new NewInstance(classReference), false, 1, null).getOutputArg(0);
 	}
 
 	public OutputPort newPrimitiveArray(final PrimitiveType elementType, final OutputPort size) {
@@ -555,6 +550,19 @@ public class BasicBlockBuilder {
 			} else {
 				throw new IllegalStateException();
 			}
+		} else if (node.getData() instanceof Method) {
+			final Map<PortId, Value> returnedValues = ((Method) node.getData()).compute(input);
+			for (final Entry<PortId, Value> entry : returnedValues.entrySet()) {
+				computedValues.put(node.getOutput(entry.getKey()), entry.getValue());
+			}
+			return null;
+		} else if (node.getData() instanceof LoadHeap) {
+			computedValues.put(node.getOutput(PortId.arg(0)), Value.unknown(Type.unknown()));
+			return null;
+		} else if (node.getData() instanceof StoreHeap) {
+			computedValues.put(node.getOutput(PortId.environment()), Value.unknown(Type.unknown()));
+			computedValues.put(node.getOutput(PortId.arg(0)), Value.unknown(Type.unknown()));
+			return null;
 		} else {
 			throw new IllegalStateException("Unsupported node: " + node.getData());
 		}

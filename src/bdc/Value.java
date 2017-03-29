@@ -23,6 +23,11 @@ public abstract class Value {
 			Object getConstant() {
 				throw new IllegalStateException();
 			}
+
+			@Override
+			public String toString() {
+				return "unknown";
+			}
 		};
 	}
 

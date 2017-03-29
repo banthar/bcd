@@ -527,11 +527,17 @@ public class InstructionParser {
 					block.storeStaticField(constantPool.getFieldReference(getUnsignedShort(in)), block.pop());
 					break;
 				case 0xb4:
-					block.push(block.loadField(constantPool.getFieldReference(getUnsignedShort(in)), block.pop()));
+					final OutputPort reference = block.pop();
+					block.push(block.loadField(constantPool.getFieldReference(getUnsignedShort(in)),
+							block.loadHeap(reference)));
 					break;
-				case 0xb5:
-					block.storeField(constantPool.getFieldReference(getUnsignedShort(in)), block.pop(), block.pop());
+				case 0xb5: {
+					final OutputPort value = block.pop();
+					final OutputPort target = block.pop();
+					block.storeHeap(target, block.storeField(constantPool.getFieldReference(getUnsignedShort(in)),
+							block.loadHeap(target), value));
 					break;
+				}
 				case 0xb6: {
 					final MethodReference methodReference = constantPool.getMethodReference(getUnsignedShort(in));
 					final List<OutputPort> args = readMethodArguments(methodReference.getType(), block);
@@ -580,7 +586,8 @@ public class InstructionParser {
 				case 0xba:
 					throw new ClassFormatException("invokedynamic instruction not supported");
 				case 0xbb:
-					block.push(block.newInstance(constantPool.getClassReference(getUnsignedShort(in))));
+					block.push(
+							block.allocHeap(block.newInstance(constantPool.getClassReference(getUnsignedShort(in)))));
 					break;
 				case 0xbc: {
 					final PrimitiveType type = PrimitiveType.fromArrayTypeId(getUnsignedByte(in));
