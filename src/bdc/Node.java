@@ -150,6 +150,9 @@ class Node implements InputNode, OutputNode {
 		if (!removed.getTargets().isEmpty()) {
 			throw new IllegalStateException("Removing used output ports: " + removed);
 		}
+		if (getAllOutputPorts().isEmpty()) {
+			unlinkInput();
+		}
 	}
 
 	@Override

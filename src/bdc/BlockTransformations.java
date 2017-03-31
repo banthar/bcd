@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import bdc.ConstantPool.MethodReference;
 import bdc.PortId.PortType;
 
 public class BlockTransformations {
@@ -295,6 +296,8 @@ public class BlockTransformations {
 				node.getOutput(PortId.arg(0)).replaceWith(value);
 				node.unlinkInput();
 			}
+		} else if (node.getData() instanceof MethodReference || node.getData() instanceof Method) {
+			newValues.clear();
 		}
 
 		final Set<? extends InputPort> targets;

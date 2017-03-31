@@ -14,6 +14,7 @@ public class ProgramTransformations {
 		do {
 			BlockTransformations.removeDeadBlocks(mainMethod.getBlock());
 			BlockTransformations.removeDirectJumps(mainMethod.getBlock());
+			BlockTransformations.removeUnnecessaryHeapAllocations(mainMethod.getBlock());
 		} while (propagateConstants(mainMethod.getBlock()));
 	}
 

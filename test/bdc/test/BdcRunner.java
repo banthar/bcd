@@ -104,10 +104,7 @@ public class BdcRunner extends Runner implements Filterable {
 			try {
 				try (final PrintStream out = new PrintStream(new File(name + ".dot"))) {
 					out.println("digraph G {");
-					m.dump(out);
-					for (final bdc.Method target : m.getCallees()) {
-						target.dump(out);
-					}
+					m.dumpRecursively(out);
 					out.println("}");
 				}
 			} catch (final Throwable e1) {

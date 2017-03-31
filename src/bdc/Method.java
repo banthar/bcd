@@ -99,14 +99,49 @@ public class Method {
 		}
 	}
 
+	public void display() {
+		try {
+			final Process exec = Runtime.getRuntime().exec(new String[] { "/usr/bin/env", "dot", "-Tx11" });
+			try (final PrintStream out = new PrintStream(exec.getOutputStream())) {
+				out.println("digraph G {");
+				dumpRecursively(out);
+				out.println("}");
+			}
+			final byte[] buf = new byte[1024];
+			while (true) {
+				final int len = exec.getErrorStream().read(buf);
+				if (len < 0) {
+					break;
+				}
+				System.err.write(buf, 0, len);
+			}
+		} catch (final IOException e) {
+			throw new IllegalStateException(e);
+		}
+	}
+
 	public void dump(final PrintStream out) {
 		if (this.block != null) {
-			final String methodName = (this.selfType.getName() + "_" + getName()).replace('<', '_').replace('>', '_')
-					.replace('$', '_').replace('/', '_');
-			out.println("  subgraph cluster_" + methodName + " {");
-			out.println("    label=\"" + getName() + "\";");
+			final String methodName = (this.selfType.getName() + "_" + getName() + "_" + getDescriptor())
+					.replace('<', '_').replace('>', '_').replace('$', '_').replace('/', '_').replace('(', '_')
+					.replace(')', '_').replace(';', '_');
+			out.println("  subgraph \"cluster_" + methodName + "\" {");
+			out.println("    label=\"" + getName() + getDescriptor() + "\";");
 			this.block.dump(out, methodName);
 			out.println("  }");
+		}
+	}
+
+	public void dumpRecursively(final PrintStream out) {
+		dumpRecursively(out, new HashSet<>());
+	}
+
+	private void dumpRecursively(final PrintStream out, final Set<Method> visited) {
+		dump(out);
+		for (final bdc.Method target : getCallees()) {
+			if (visited.add(target)) {
+				target.dumpRecursively(out);
+			}
 		}
 	}
 
@@ -116,12 +151,14 @@ public class Method {
 
 	public Set<Method> getCallees() {
 		final Set<Method> targets = new HashSet<>();
-		for (final Node node : this.block.terminator.getAllLinkedNodes()) {
-			if (node.getData() instanceof Method) {
-				targets.add((Method) node.getData());
-			}
-			if (node.getData() instanceof MethodReference) {
-				throw new IllegalStateException();
+		for (final BasicBlockBuilder block : this.block.getAllLinkedBlocks()) {
+			for (final Node node : block.getNodes()) {
+				if (node.getData() instanceof Method) {
+					targets.add((Method) node.getData());
+				}
+				if (node.getData() instanceof MethodReference) {
+					throw new IllegalStateException();
+				}
 			}
 		}
 		return targets;
@@ -129,8 +166,7 @@ public class Method {
 
 	@Override
 	public String toString() {
-		return "Method [accessFlags=" + this.accessFlags + ", name=" + this.name + ", descriptor=" + this.descriptor
-				+ ", code=" + this.code + ", exceptions=" + this.exceptions + ", signature=" + this.signature + "]";
+		return "Method " + this.selfType + "." + this.name + getDescriptor();
 	}
 
 	public void assertReturnsConstant(final Object expectedValue) {
@@ -228,4 +264,5 @@ public class Method {
 		}
 		return getBlock().compute(methodInput);
 	}
+
 }
