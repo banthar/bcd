@@ -10,16 +10,15 @@ public class ValueArray extends Value {
 	private final Value length;
 	private final Value[] elements;
 
-	public ValueArray(final FieldType elementType, final boolean isConstant, final Value length,
-			final Value[] elements) {
-		super(Type.array(elementType), isConstant);
+	public ValueArray(final FieldType elementType, final Value length, final Value[] elements) {
+		super(Type.array(elementType));
 		this.elementType = elementType;
 		this.length = length;
 		this.elements = elements;
 	}
 
-	public ValueArray(final FieldType elementType, final boolean isConstant, final Value length) {
-		super(Type.array(elementType), isConstant);
+	public ValueArray(final FieldType elementType, final Value length) {
+		super(Type.array(elementType));
 		this.elementType = elementType;
 		this.length = length;
 		if (length.isConstant()) {
@@ -30,8 +29,8 @@ public class ValueArray extends Value {
 		}
 	}
 
-	public ValueArray(final FieldType elementType, final boolean isConstant, final Object[] value) {
-		super(Type.array(elementType), isConstant);
+	public ValueArray(final FieldType elementType, final Object[] value) {
+		super(Type.array(elementType));
 		this.elementType = elementType;
 		this.length = Value.integer(value.length);
 		this.elements = new Value[value.length];
@@ -75,7 +74,7 @@ public class ValueArray extends Value {
 		}
 		final Value[] newElements = this.elements.clone();
 		newElements[(Integer) index.getConstant()] = value;
-		return new ValueArray(this.elementType, isConstant(), this.length, newElements);
+		return new ValueArray(this.elementType, this.length, newElements);
 	}
 
 	public Value extractElement(final Value index) {

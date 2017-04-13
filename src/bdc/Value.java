@@ -1,16 +1,19 @@
 package bdc;
 
+import java.util.Map;
+
+import bdc.ConstantPool.FieldReference;
 import bdc.Type.ArrayType;
 import bdc.Type.FieldType;
+import bdc.Type.PrimitiveType;
+import bdc.Type.ReferenceType;
 
 public abstract class Value {
 
 	private final FieldType type;
-	private final boolean isConstant;
 
-	public Value(final FieldType type, final boolean isConstant) {
+	public Value(final FieldType type) {
 		this.type = type;
-		this.isConstant = isConstant;
 	}
 
 	public static Value integer(final int n) {
@@ -18,9 +21,15 @@ public abstract class Value {
 	}
 
 	public static Value unknown(final FieldType type) {
-		return new Value(type, false) {
+		return new Value(type) {
+
 			@Override
-			Object getConstant() {
+			public boolean isConstant() {
+				return false;
+			}
+
+			@Override
+			public Object getConstant() {
 				throw new IllegalStateException();
 			}
 
@@ -31,17 +40,19 @@ public abstract class Value {
 		};
 	}
 
-	abstract Object getConstant();
+	public abstract Object getConstant();
 
-	public boolean isConstant() {
-		return this.isConstant;
-	}
+	public abstract boolean isConstant();
 
 	public static Value of(final FieldType type, final Object value) {
 		if (type instanceof ArrayType) {
-			return new ValueArray(((ArrayType) type).getElementType(), true, (Object[]) value);
-		} else {
+			return new ValueArray(((ArrayType) type).getElementType(), (Object[]) value);
+		} else if (type instanceof PrimitiveType) {
 			return new ValuePrimitive(type, true, value);
+		} else if (type instanceof ReferenceType) {
+			return new ValueObject(type, (Map<FieldReference, ?>) value);
+		} else {
+			throw new IllegalStateException("Unsupported type: " + type);
 		}
 	}
 
@@ -50,10 +61,15 @@ public abstract class Value {
 	}
 
 	public static ValueArray array(final FieldType elementType, final Value length) {
-		return new ValueArray(elementType, false, length);
+		return new ValueArray(elementType, length);
+	}
+
+	public static ValueObject object(final ReferenceType type) {
+		return new ValueObject(type);
 	}
 
 	public int getInt() {
 		return (Integer) getConstant();
 	}
+
 }

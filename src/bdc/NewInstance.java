@@ -3,6 +3,7 @@ package bdc;
 import java.util.Map;
 
 import bdc.ConstantPool.ClassReference;
+import bdc.Type.ReferenceType;
 
 public class NewInstance extends PureOperation {
 
@@ -15,7 +16,12 @@ public class NewInstance extends PureOperation {
 		if (!values.isEmpty()) {
 			throw new IllegalStateException();
 		}
-		return Value.unknown(getType());
+		return Value.object(getType());
+	}
+
+	@Override
+	public ReferenceType getType() {
+		return (ReferenceType) super.getType();
 	}
 
 }

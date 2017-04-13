@@ -167,7 +167,8 @@ public class URLClassParser {
 				constantPool.getUTF8(descriptorIndex), code, exceptions, signature);
 	}
 
-	private Field[] readFields(final DataInput dataInput, final ConstantPool constantPool) throws IOException {
+	private Field[] readFields(final DataInput dataInput, final ConstantPool constantPool)
+			throws IOException, ClassFormatException {
 		final Field[] fields = new Field[dataInput.readUnsignedShort()];
 		for (int i = 0; i < fields.length; i++) {
 			fields[i] = readField(dataInput, constantPool);
@@ -175,7 +176,8 @@ public class URLClassParser {
 		return fields;
 	}
 
-	private Field readField(final DataInput dataInput, final ConstantPool constantPool) throws IOException {
+	private Field readField(final DataInput dataInput, final ConstantPool constantPool)
+			throws IOException, ClassFormatException {
 		final int accessFlags = dataInput.readUnsignedShort();
 		final String fieldName = constantPool.getUTF8(dataInput.readUnsignedShort());
 		final String descriptor = constantPool.getUTF8(dataInput.readUnsignedShort());
