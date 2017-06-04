@@ -15,14 +15,14 @@ class Node implements InputNode, OutputNode {
 
 	private final int id = nextId++;
 
-	Object data;
+	NodeOperation data;
 
 	private final Map<PortId, InputPort> input;
 
 	private final Map<PortId, OutputPort> output;
 
-	public Node(final Object data, final boolean writesMemory, final int outputs, final OutputPort inputEnvironment,
-			final List<? extends OutputPort> input) {
+	public Node(final NodeOperation data, final boolean writesMemory, final int outputs,
+			final OutputPort inputEnvironment, final List<? extends OutputPort> input) {
 		this.data = data;
 
 		this.input = new HashMap<>();
@@ -43,8 +43,8 @@ class Node implements InputNode, OutputNode {
 		}
 	}
 
-	public Node(final Object data, final boolean writesMemory, final int outputs, final OutputPort inputEnvironment,
-			final OutputPort... input) {
+	public Node(final NodeOperation data, final boolean writesMemory, final int outputs,
+			final OutputPort inputEnvironment, final OutputPort... input) {
 		this(data, writesMemory, outputs, inputEnvironment, Arrays.asList(input));
 	}
 

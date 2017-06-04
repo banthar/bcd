@@ -14,7 +14,6 @@ import java.util.Objects;
 import java.util.Set;
 
 import bdc.ConstantPool.ClassReference;
-import bdc.ConstantPool.MethodReference;
 import bdc.Type.MethodType;
 import bdc.Type.PrimitiveType;
 
@@ -83,18 +82,7 @@ public class Method {
 	public void resolve() throws IOException, ClassFormatException {
 		for (final BasicBlockBuilder block : this.block.getAllLinkedBlocks()) {
 			for (final Node node : block.getNodes()) {
-				if (node.getData() instanceof MethodReference) {
-					final MethodReference reference = (MethodReference) node.getData();
-					try {
-						final Method method = this.bytecodeLoader.loadClass(reference.getOwnerClass().getName())
-								.getMethod(reference.getName(), reference.getDescriptor());
-						method.parse();
-						node.data = method;
-						method.callers.add(node);
-					} catch (final ClassNotFoundException | NoSuchMethodException e) {
-						System.err.println(e);
-					}
-				}
+				node.data.resolve(this.bytecodeLoader, node);
 			}
 		}
 	}
@@ -153,11 +141,8 @@ public class Method {
 		final Set<Method> targets = new HashSet<>();
 		for (final BasicBlockBuilder block : this.block.getAllLinkedBlocks()) {
 			for (final Node node : block.getNodes()) {
-				if (node.getData() instanceof Method) {
-					targets.add((Method) node.getData());
-				}
-				if (node.getData() instanceof MethodReference) {
-					throw new IllegalStateException();
+				if (node.getData() instanceof MethodCall) {
+					targets.add(((MethodCall) node.getData()).getMethod());
 				}
 			}
 		}
@@ -265,4 +250,7 @@ public class Method {
 		return getBlock().compute(methodInput);
 	}
 
+	public void addCaller(final Node node) {
+		this.callers.add(node);
+	}
 }

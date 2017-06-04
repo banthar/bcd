@@ -1,6 +1,6 @@
 package bdc;
 
-public class BlockInit {
+public class BlockInit implements NodeOperation {
 
 	private final BasicBlockBuilder block;
 

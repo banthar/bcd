@@ -100,10 +100,10 @@ public class ProgramTransformations {
 				node.getOutput(PortId.arg(0))
 						.replaceWith(Node.constant(operation.getType(), computedValue.getConstant()));
 			}
-		} else if (node.getData() instanceof Method) {
+		} else if (node.getData() instanceof MethodCall) {
 			if (constantInput != null) {
-				final Method calee = (Method) node.getData();
-				final Map<PortId, Value> values = calee.compute(constantInput);
+				final MethodCall calee = (MethodCall) node.getData();
+				final Map<PortId, Value> values = calee.getMethod().compute(constantInput);
 				for (final Entry<PortId, Value> entry : values.entrySet()) {
 					final Value value = entry.getValue();
 					if (value.isConstant()) {

@@ -187,33 +187,36 @@ public class BasicBlockBuilder {
 	}
 
 	public OutputPort checkedCast(final ClassReference type, final OutputPort value) {
-		final Node operation = new Node(Arrays.asList("checked_cast", type), false, 1, null, value);
+		final Node operation = new Node(NodeOperation.unimplemented("checked_cast", type), false, 1, null, value);
 		return operation.getOutputArg(0);
 	}
 
 	public OutputPort instanceOf(final ClassReference type, final OutputPort value) {
-		final Node operation = new Node(Arrays.asList("instance_of", type), false, 1, null, value);
+		final Node operation = new Node(NodeOperation.unimplemented("instance_of", type), false, 1, null, value);
 		return operation.getOutputArg(0);
 	}
 
 	public void monitorEnter(final OutputPort monitor) {
-		final Node operation = new Node(Arrays.asList("monitor_enter"), true, 1, this.environment, monitor);
+		final Node operation = new Node(NodeOperation.unimplemented("monitor_enter"), true, 1, this.environment,
+				monitor);
 		this.environment = operation.getOutputEnvironment();
 	}
 
 	public void monitorExit(final OutputPort monitor) {
-		final Node operation = new Node(Arrays.asList("monitor_exit"), true, 1, this.environment, monitor);
+		final Node operation = new Node(NodeOperation.unimplemented("monitor_exit"), true, 1, this.environment,
+				monitor);
 		this.environment = operation.getOutputEnvironment();
 	}
 
 	public OutputPort loadStaticField(final FieldReference fieldReference) {
-		final Node operation = new Node(Arrays.asList("load_static_field", fieldReference), false, 1, this.environment);
+		final Node operation = new Node(NodeOperation.unimplemented("load_static_field", fieldReference), false, 1,
+				this.environment);
 		return operation.getOutputArg(0);
 	}
 
 	public void storeStaticField(final FieldReference fieldReference, final OutputPort value) {
-		final Node operation = new Node(Arrays.asList("store_static_field", fieldReference), true, 1, this.environment,
-				value);
+		final Node operation = new Node(NodeOperation.unimplemented("store_static_field", fieldReference), true, 1,
+				this.environment, value);
 		this.environment = operation.getOutputEnvironment();
 	}
 
@@ -239,7 +242,8 @@ public class BasicBlockBuilder {
 			input.add(target);
 		}
 		input.addAll(args);
-		final Node operation = new Node(methodReference, true, methodType.isVoid() ? 0 : 1, this.environment, input);
+		final Node operation = new Node(new MethodCall(methodReference), true, methodType.isVoid() ? 0 : 1,
+				this.environment, input);
 		this.environment = operation.getOutputEnvironment();
 		if (methodType.isVoid()) {
 			return Collections.emptyList();
@@ -550,8 +554,8 @@ public class BasicBlockBuilder {
 			} else {
 				throw new IllegalStateException();
 			}
-		} else if (node.getData() instanceof Method) {
-			final Map<PortId, Value> returnedValues = ((Method) node.getData()).compute(input);
+		} else if (node.getData() instanceof MethodCall) {
+			final Map<PortId, Value> returnedValues = ((MethodCall) node.getData()).getMethod().compute(input);
 			for (final Entry<PortId, Value> entry : returnedValues.entrySet()) {
 				computedValues.put(node.getOutput(entry.getKey()), entry.getValue());
 			}
