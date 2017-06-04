@@ -3,7 +3,7 @@ package bdc;
 import java.util.HashSet;
 import java.util.Set;
 
-public class MethodInit {
+public class MethodInit implements NodeOperation {
 
 	private final Method method;
 
@@ -30,4 +30,13 @@ public class MethodInit {
 		return returnedPorts;
 	}
 
+	@Override
+	public Value getValue(final Node node, final PortId portId) {
+		if (portId.equals(PortId.environment())) {
+			return Value.unknown(Type.unknown());
+		} else {
+			// TODO refine type
+			return Value.unknown(Type.unknown());
+		}
+	}
 }

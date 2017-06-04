@@ -41,8 +41,14 @@ final class OutputPort {
 		return this.portId;
 	}
 
+	public Value getConstantValue() {
+		final Object data = getNode().getData();
+		return ((NodeOperation) data).getValue(getNode(), this.portId);
+	}
+
 	@Override
 	public String toString() {
 		return getNode() + "." + getId();
 	}
+
 }

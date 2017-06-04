@@ -92,14 +92,14 @@ public class BasicBlockBuilder {
 		return operation.getOutputArg(0);
 	}
 
-	public OutputPort allocHeap(final OutputPort intialValue) {
-		final Node operation = new Node(new AllocHeap(), true, 1, this.environment, intialValue);
+	public OutputPort allocHeap(final OutputPort initialValue) {
+		final Node operation = new Node(new AllocHeap(), true, 1, this.environment, initialValue);
 		this.environment = operation.getOutputEnvironment();
 		return operation.getOutputArg(0);
 	}
 
 	public OutputPort loadHeap(final OutputPort handle) {
-		return new Node(new LoadHeap(), false, 1, this.environment, handle).getOutputArg(0);
+		return new Node(new LoadHeap(Type.unknown()), false, 1, this.environment, handle).getOutputArg(0);
 	}
 
 	public void storeHeap(final OutputPort handle, final OutputPort value) {
@@ -222,8 +222,8 @@ public class BasicBlockBuilder {
 		return operation.getOutputArg(0);
 	}
 
-	public OutputPort storeField(final FieldReference fieldReference, final OutputPort target, final OutputPort value) {
-		return new Node(new StoreField(fieldReference), false, 1, null, target, value).getOutputArg(0);
+	public OutputPort storeField(final FieldReference field, final OutputPort target, final OutputPort value) {
+		return new Node(new StoreField(field), false, 1, null, target, value).getOutputArg(0);
 	}
 
 	public List<OutputPort> invokeVirtual(final MethodReference methodReference, final OutputPort target,

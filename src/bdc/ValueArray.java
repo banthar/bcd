@@ -23,7 +23,7 @@ public class ValueArray extends Value {
 		this.length = length;
 		if (length.isConstant()) {
 			this.elements = new Value[(Integer) length.getConstant()];
-			Arrays.fill(this.elements, Value.integer(0));
+			Arrays.fill(this.elements, Value.zero(elementType));
 		} else {
 			this.elements = null;
 		}

@@ -28,6 +28,15 @@ public class LoadConstantOperation extends PureOperation {
 	}
 
 	@Override
+	public Value getValue(final Node node, final PortId portId) {
+		if (portId.equals(PortId.arg(0))) {
+			return toValue();
+		} else {
+			throw new IllegalStateException();
+		}
+	}
+
+	@Override
 	protected Value computeSingleOutput(final Map<PortId, ? extends Value> values) {
 		if (!values.isEmpty()) {
 			throw new IllegalStateException("Expected no arguments: " + values);

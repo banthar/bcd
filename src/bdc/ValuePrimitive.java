@@ -1,14 +1,14 @@
 package bdc;
 
-import bdc.Type.FieldType;
+import bdc.Type.PrimitiveType;
 
 public class ValuePrimitive extends Value {
 
 	private final Object value;
 	private final boolean isConstant;
 
-	public ValuePrimitive(final FieldType integer, final boolean isConstant, final Object value) {
-		super(integer);
+	public ValuePrimitive(final PrimitiveType type, final boolean isConstant, final Object value) {
+		super(type);
 		this.isConstant = isConstant;
 		this.value = value;
 	}

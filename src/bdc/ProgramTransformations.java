@@ -61,14 +61,7 @@ public class ProgramTransformations {
 		final Map<PortId, Value> constantInput = new HashMap<>();
 		for (final Entry<PortId, ? extends InputPort> port : node.getAllInputPorts().entrySet()) {
 			blocksRemoved |= propagateConstants(block, port.getValue().getSource().getNode());
-			final Object data = port.getValue().getSource().getNode().getData();
-			if (data instanceof LoadConstantOperation) {
-				final LoadConstantOperation loadConstantOperation = (LoadConstantOperation) data;
-				constantInput.put(port.getKey(),
-						Value.of(loadConstantOperation.getType(), loadConstantOperation.getValue()));
-			} else {
-				constantInput.put(port.getKey(), Value.unknown(Type.unknown()));
-			}
+			constantInput.put(port.getKey(), port.getValue().getSource().getConstantValue());
 		}
 		if (node.getData() instanceof ConditionalJump) {
 			if (block.terminator != node) {

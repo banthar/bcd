@@ -11,6 +11,7 @@ import bdc.Type.ReferenceType;
 public abstract class Value {
 
 	private final FieldType type;
+	private final Throwable constructed = new Throwable("Constructed at");
 
 	public Value(final FieldType type) {
 		this.type = type;
@@ -40,6 +41,14 @@ public abstract class Value {
 		};
 	}
 
+	public static Value unknownHeapReference() {
+		return unknown(Type.unknown());
+	}
+
+	public static Value unknownEnvironment() {
+		return unknown(Type.unknown());
+	}
+
 	public abstract Object getConstant();
 
 	public abstract boolean isConstant();
@@ -48,9 +57,30 @@ public abstract class Value {
 		if (type instanceof ArrayType) {
 			return new ValueArray(((ArrayType) type).getElementType(), (Object[]) value);
 		} else if (type instanceof PrimitiveType) {
-			return new ValuePrimitive(type, true, value);
+			return new ValuePrimitive((PrimitiveType) type, true, value);
 		} else if (type instanceof ReferenceType) {
-			return new ValueObject(type, (Map<FieldReference, ?>) value);
+			return new ValueObject(type, (Map<FieldReference, ? extends Value>) value);
+		} else {
+			throw new IllegalStateException("Unsupported type: " + type);
+		}
+	}
+
+	public static Value zero(final FieldType type) {
+		if (type instanceof PrimitiveType) {
+			return Value.integer(0);
+		} else if (type instanceof ReferenceType) {
+			return new Value(type) {
+
+				@Override
+				public boolean isConstant() {
+					return true;
+				}
+
+				@Override
+				public Object getConstant() {
+					return null;
+				}
+			};
 		} else {
 			throw new IllegalStateException("Unsupported type: " + type);
 		}
@@ -72,4 +102,11 @@ public abstract class Value {
 		return (Integer) getConstant();
 	}
 
+	public <T> T as(final java.lang.Class<T> type) {
+		if (type.isInstance(this)) {
+			return type.cast(this);
+		} else {
+			throw new IllegalStateException(this + " is not a " + type.getName(), this.constructed);
+		}
+	}
 }

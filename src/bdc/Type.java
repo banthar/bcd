@@ -97,7 +97,6 @@ public interface Type {
 				throw new IllegalStateException();
 			}
 		}
-
 	}
 
 	class ArrayType implements FieldType {
@@ -406,8 +405,8 @@ public interface Type {
 		return fromJavaClass(String.class);
 	}
 
-	static FieldType integer() {
-		return fromJavaClass(int.class);
+	static PrimitiveType integer() {
+		return (PrimitiveType) fromJavaClass(int.class);
 	}
 
 	static ArrayType array(final FieldType elementType) {

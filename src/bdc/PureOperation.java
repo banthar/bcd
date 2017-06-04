@@ -16,6 +16,11 @@ public abstract class PureOperation implements NodeOperation {
 		return this.type;
 	}
 
+	@Override
+	public Value getValue(final Node node, final PortId portId) {
+		return Value.unknown(getType());
+	}
+
 	public final Map<PortId, ? extends Value> compute(final Map<PortId, ? extends Value> values) {
 		return Collections.singletonMap(PortId.arg(0), computeSingleOutput(values));
 	}
