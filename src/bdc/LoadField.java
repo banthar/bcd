@@ -17,7 +17,7 @@ public class LoadField extends PureOperation {
 	protected Value computeSingleOutput(final Map<PortId, ? extends Value> values) {
 		final Value source = values.get(PortId.arg(0));
 		if (source.isConstant()) {
-			return source.as(ValueObject.class).getConstant().get(this.field);
+			return source.as(ValueObject.class).getField(this.field);
 		} else {
 			return Value.unknown(getType());
 		}

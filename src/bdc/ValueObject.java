@@ -26,6 +26,15 @@ public class ValueObject extends Value {
 		return this.value;
 	}
 
+	public Value getField(final FieldReference field) {
+		final Value v = this.value.get(field);
+		if (v == null) {
+			return Value.zero(field.getType());
+		} else {
+			return v;
+		}
+	}
+
 	@Override
 	public boolean isConstant() {
 		return true;
@@ -36,5 +45,4 @@ public class ValueObject extends Value {
 		map.put(field, value);
 		return new ValueObject(getType(), Collections.unmodifiableMap(map));
 	}
-
 }
