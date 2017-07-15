@@ -18,7 +18,6 @@ import bdc.ConstantPool.FieldReference;
 import bdc.ConstantPool.MethodReference;
 import bdc.PortId.PortType;
 import bdc.Type.FieldType;
-import bdc.Type.MethodType;
 import bdc.Type.PrimitiveType;
 
 public class BasicBlockBuilder {

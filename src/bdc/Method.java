@@ -14,7 +14,6 @@ import java.util.Objects;
 import java.util.Set;
 
 import bdc.ConstantPool.ClassReference;
-import bdc.Type.MethodType;
 import bdc.Type.PrimitiveType;
 
 public class Method {
@@ -252,5 +251,13 @@ public class Method {
 
 	public void addCaller(final Node node) {
 		this.callers.add(node);
+	}
+
+	public MethodType getType() {
+		try {
+			return MethodType.fromDescriptor(getDescriptor());
+		} catch (final ClassFormatException e) {
+			throw new IllegalStateException(e);
+		}
 	}
 }

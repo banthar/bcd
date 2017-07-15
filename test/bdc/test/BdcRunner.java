@@ -18,6 +18,7 @@ import org.junit.runner.manipulation.NoTestsRemainException;
 import org.junit.runner.notification.Failure;
 import org.junit.runner.notification.RunNotifier;
 
+import bdc.MethodType;
 import bdc.ProgramTransformations;
 import bdc.Type;
 import bdc.Type.FieldType;
@@ -59,7 +60,7 @@ public class BdcRunner extends Runner implements Filterable {
 				for (final Parameter p : m.getParameters()) {
 					params.add(Type.fromJavaClass(p.getType()));
 				}
-				final String descriptor = new Type.MethodType(params, Type.fromJavaClass(m.getReturnType()))
+				final String descriptor = new MethodType(params, Type.fromJavaClass(m.getReturnType()))
 						.toDescriptor();
 				runTest(m.getName(), descriptor, expectedValue);
 			} catch (final Throwable e) {

@@ -18,7 +18,6 @@ import bdc.ConstantPool.ClassReference;
 import bdc.ConstantPool.LongValueConstant;
 import bdc.ConstantPool.MethodReference;
 import bdc.ConstantPool.ValueConstant;
-import bdc.Type.MethodType;
 import bdc.Type.PrimitiveType;
 import bdc.Type.ReferenceType;
 

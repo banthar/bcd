@@ -34,7 +34,7 @@ public interface Type {
 	}
 
 	public enum PrimitiveType implements FieldType {
-		Integer("int", "I"), Long("long", "L"), Float("float", "F"), Double("double", "D"), Reference("Object",
+		Integer("int", "I"), Long("long", "J"), Float("float", "F"), Double("double", "D"), Reference("Object",
 				"LObject;"), Byte("byte", "B"), Char("char", "C"), Short("short", "S"), Boolean("boolean", "Z");
 
 		private final String javaName;
@@ -162,49 +162,6 @@ public interface Type {
 		@Override
 		public String toDescriptor() {
 			return "L" + name + ";";
-		}
-	}
-
-	class MethodType implements Type {
-
-		private final List<FieldType> argumentTypes;
-		private final Type returnType;
-
-		public MethodType(final List<FieldType> argumentTypes, final Type returnType) {
-			this.argumentTypes = argumentTypes;
-			this.returnType = returnType;
-		}
-
-		public List<? extends FieldType> getArgumentTypes() {
-			return argumentTypes;
-		}
-
-		public Type getReturnType() {
-			return returnType;
-		}
-
-		public boolean isVoid() {
-			return returnType instanceof VoidType;
-		}
-
-		@Override
-		public String toString() {
-			return argumentTypes + " -> " + returnType;
-		}
-
-		public static MethodType fromDescriptor(final String descriptor) throws ClassFormatException {
-			return (MethodType) Type.fromDescriptor(descriptor);
-		}
-
-		@Override
-		public String toDescriptor() {
-			String descriptor = "(";
-			for (final FieldType arg : argumentTypes) {
-				descriptor += arg.toDescriptor();
-			}
-			descriptor += ")";
-			descriptor += returnType.toDescriptor();
-			return descriptor;
 		}
 	}
 

@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.util.Arrays;
 
 import bdc.Type.FieldType;
-import bdc.Type.MethodType;
 import bdc.Type.ReferenceType;
 
 public class ConstantPool {
