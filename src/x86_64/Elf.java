@@ -100,7 +100,7 @@ public class Elf {
 		final int programHeaderCount = input.getShort();
 
 		final int sectionHeaderSize = input.getShort();
-		final int sectionHeaderNum = input.getShort();
+		final int sectionHeaderCount = input.getShort();
 		final int sectionHeaderNamesIndex = input.getShort();
 
 		System.out.println("is64: " + is64);
@@ -121,13 +121,18 @@ public class Elf {
 		System.out.format("programHeaderEntsize: %d\n", programHeaderSize);
 		System.out.format("programHeaderNum: %d\n", programHeaderCount);
 		System.out.format("sectionHeaderSize: %d\n", sectionHeaderSize);
-		System.out.format("sectionHeaderNum: %d\n", sectionHeaderNum);
+		System.out.format("sectionHeaderCount: %d\n", sectionHeaderCount);
 		System.out.format("sectionHeaderNamesIndex: %d\n", sectionHeaderNamesIndex);
 
 		for (int i = 0; i < programHeaderCount; i++) {
 			input.position((int) programHeaderOffset + i * programHeaderSize);
-			final int pType = input.getInt();
-			System.out.format("pType: 0x%08x\n", pType);
+			System.out.println(ProgramHeaderType.fromId(input.getInt()));
+		}
+
+		for (int i = 0; i < sectionHeaderCount; i++) {
+			input.position((int) sectionHeaderOffset + i * sectionHeaderSize);
+			System.out.println("section name: " + input.getInt());
+			System.out.println(SectionHeaderType.fromId(input.getInt()));
 		}
 
 		System.out.println("END of ELF");
