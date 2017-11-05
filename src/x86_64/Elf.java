@@ -103,43 +103,49 @@ public class Elf {
 		final int sectionHeaderCount = input.getShort();
 		final int sectionHeaderNamesIndex = input.getShort();
 
-		System.out.println("is64: " + is64);
-		System.out.println("isBigEndian: " + isBigEndian);
-		System.out.println("version: " + version);
-		System.out.println("osabi: " + osabi);
-		System.out.println("abiversion: " + abiversion);
-		System.out.println("type: " + type);
-		System.out.println("d1: " + machine);
-		System.out.println("d2: " + e_version);
+		// System.out.println("is64: " + is64);
+		// System.out.println("isBigEndian: " + isBigEndian);
+		// System.out.println("version: " + version);
+		// System.out.println("osabi: " + osabi);
+		// System.out.println("abiversion: " + abiversion);
+		// System.out.println("type: " + type);
+		// System.out.println("d1: " + machine);
+		// System.out.println("d2: " + e_version);
+		//
+		// System.out.format("entry: 0x%08x\n", entry);
+		// System.out.format("programHeaderOffset: 0x%08x\n", programHeaderOffset);
+		// System.out.format("sectionHeaderOffset: 0x%08x\n", sectionHeaderOffset);
+		//
+		// System.out.format("flags: 0x%08x\n", flags);
+		// System.out.format("headerSize: %d\n", headerSize);
+		// System.out.format("programHeaderEntsize: %d\n", programHeaderSize);
+		// System.out.format("programHeaderNum: %d\n", programHeaderCount);
+		// System.out.format("sectionHeaderSize: %d\n", sectionHeaderSize);
+		// System.out.format("sectionHeaderCount: %d\n", sectionHeaderCount);
+		// System.out.format("sectionHeaderNamesIndex: %d\n", sectionHeaderNamesIndex);
 
-		System.out.format("entry: 0x%08x\n", entry);
-		System.out.format("programHeaderOffset: 0x%08x\n", programHeaderOffset);
-		System.out.format("sectionHeaderOffset: 0x%08x\n", sectionHeaderOffset);
-
-		System.out.format("flags: 0x%08x\n", flags);
-		System.out.format("headerSize: %d\n", headerSize);
-		System.out.format("programHeaderEntsize: %d\n", programHeaderSize);
-		System.out.format("programHeaderNum: %d\n", programHeaderCount);
-		System.out.format("sectionHeaderSize: %d\n", sectionHeaderSize);
-		System.out.format("sectionHeaderCount: %d\n", sectionHeaderCount);
-		System.out.format("sectionHeaderNamesIndex: %d\n", sectionHeaderNamesIndex);
+		MemoryView memory = MemoryView.empty();
 
 		for (int i = 0; i < programHeaderCount; i++) {
 			input.position((int) programHeaderOffset + i * programHeaderSize);
-			System.out.println(ProgramHeaderType.fromId(input.getInt()));
+			final ProgramHeader programHeader = new ProgramHeader(input, is64);
+
+			if (programHeader.p_type == ProgramHeaderType.PT_LOAD) {
+				memory = memory.map(programHeader.p_vaddr, programHeader.p_memsz, programHeader.p_flags, input,
+						programHeader.p_offset, programHeader.p_filesz);
+			}
 		}
 
 		for (int i = 0; i < sectionHeaderCount; i++) {
 			input.position((int) sectionHeaderOffset + i * sectionHeaderSize);
-			System.out.println("section name: " + input.getInt());
-			System.out.println(SectionHeaderType.fromId(input.getInt()));
+			// System.out.println("section name: " + input.getInt());
+			// System.out.println(SectionHeaderType.fromId(input.getInt()));
 		}
 
-		System.out.println("END of ELF");
-
+		System.out.println(String.format("%02x", memory.get(entry)));
 	}
 
-	private static long readPointer(final MappedByteBuffer input, final boolean is64) {
+	public static long readPointer(final ByteBuffer input, final boolean is64) {
 		if (is64) {
 			return input.getLong();
 		} else {
@@ -164,8 +170,9 @@ public class Elf {
 			new Elf().write(out, true, true,
 					new byte[] { (byte) 0xB8, 0x3C, 0x00, 0x00, 0x00, 0x31, (byte) 0xFF, 0x0F, 0x05 });
 		}
-		read(file);
-		read(new File("/bin/sh"));
+		// read(file);
+		read(new File("no_stdlib"));
+		// read(new File("/bin/sh"));
 	}
 
 	private static void read(final File file) throws IOException {
