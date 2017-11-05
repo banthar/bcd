@@ -12,6 +12,8 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
 import java.nio.file.StandardOpenOption;
 
+import x86_64.MemoryView.InvalidAddressException;
+
 public class Elf {
 
 	public void write(final OutputStream out, final boolean is64, final boolean isLittleEndian, final byte[] code)
@@ -21,6 +23,7 @@ public class Elf {
 
 		final ByteBuffer programHeader = ByteBuffer.allocate(is64 ? 56 : 32);
 		final ByteBuffer fileHeader = ByteBuffer.allocate(is64 ? 64 : 52);
+		final long codeOffset = programHeader.capacity() + fileHeader.capacity();
 
 		programHeader.order(isLittleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
 		programHeader.putInt(1); // p_type
@@ -28,8 +31,8 @@ public class Elf {
 		programHeader.putLong(0); // p_offset
 		programHeader.putLong(baseAddress); // p_vaddr
 		programHeader.putLong(baseAddress); // p_paddr
-		programHeader.putLong(code.length); // p_filesz
-		programHeader.putLong(code.length); // p_memsz
+		programHeader.putLong(code.length + codeOffset); // p_filesz
+		programHeader.putLong(code.length + codeOffset); // p_memsz
 		programHeader.putLong(0); // p_align
 
 		fileHeader.put(new byte[] { 0x7f, 'E', 'L', 'F' }); // EI_MAG
@@ -142,7 +145,76 @@ public class Elf {
 			// System.out.println(SectionHeaderType.fromId(input.getInt()));
 		}
 
-		System.out.println(String.format("%02x", memory.get(entry)));
+		System.out.println(disassemble(memory, entry));
+	}
+
+	private static String disassemble(final MemoryView memory, final long entry) {
+		String s = "";
+		final ByteStream input = memory.createStream(entry);
+		while (true) {
+			final long startPosition = input.getPosition();
+
+			if (startPosition > entry + 1024) {
+				return s;
+			}
+
+			String line = "";
+			try {
+				final int opcode = input.getByte();
+				switch (opcode) {
+				case 0xb8:
+				case 0xb9:
+				case 0xba:
+				case 0xbb:
+				case 0xbc:
+				case 0xbd:
+				case 0xbe:
+				case 0xbf: {
+					final int dstReg = opcode & 0x07;
+					final int imm = input.getInt();
+					line = String.format("r%d = 0x%08x", dstReg, imm);
+					break;
+				}
+				case 0x31: {
+					final int regs = input.getByte();
+					final int dstReg = regs & 0b00000111;
+					final int srcReg = (regs & 0b00111000) >>> 3;
+					final int extraR = (regs & 0x11000000) >>> 6;
+					if (dstReg == srcReg) {
+						line = String.format("r%d = 0", dstReg);
+					} else {
+						line = String.format("r%d ^= r%d %d", dstReg, srcReg, extraR);
+					}
+					break;
+				}
+				case 0xc3: {
+					line = String.format("ret (near)");
+					break;
+				}
+				case 0x0f: {
+					final int extendedOpcode = input.getByte();
+					switch (extendedOpcode) {
+					case 0x05:
+						line = "syscall";
+					}
+					break;
+				}
+				default: {
+					line = String.format("unknown opcode", opcode);
+					break;
+				}
+				}
+
+				String hex = "";
+				for (long i = startPosition; i < input.getPosition(); i++) {
+					hex += String.format(" %02x", memory.get(i));
+				}
+				s += String.format("%-32s # %s\n", line, hex);
+
+			} catch (final InvalidAddressException e) {
+				return s;
+			}
+		}
 	}
 
 	public static long readPointer(final ByteBuffer input, final boolean is64) {
