@@ -12,13 +12,17 @@ public class ByteStream {
 		this.position = offset;
 	}
 
-	public int getByte() throws InvalidAddressException {
-		return 0xff & this.memory.get(this.position++);
+	public int getUnsignedByte() throws InvalidAddressException {
+		return 0xff & getByte();
+	}
+
+	public byte getByte() throws InvalidAddressException {
+		return this.memory.get(this.position++);
 	}
 
 	public int getInt() throws InvalidAddressException {
 		final int n = 0;
-		return getByte() + getByte() + getByte() + getByte();
+		return getUnsignedByte() + getUnsignedByte() + getUnsignedByte() + getUnsignedByte();
 	}
 
 	public long getPosition() {

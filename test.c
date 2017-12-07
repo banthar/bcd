@@ -20,7 +20,8 @@ static ssize_t write(int fd, const void *buf, size_t count) {
 }
 
 int _start() {
-	write(1, "hello\n", 6);
+	int n = 1;
+	write(1, &n, 4);
 	exit(0);
 }
 

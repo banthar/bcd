@@ -148,6 +148,11 @@ public class Elf {
 		System.out.println(disassemble(memory, entry));
 	}
 
+	private static String getRegisterName(final int n) {
+		return "r" + n + "(" + new String[] { "ax", "cx", "dx", "bx", "[sib]", "ip", "si", "di", "r8", "r9", "r10",
+				"r11", "[sib]", "ip2", "r14", "r15" }[n] + ")";
+	}
+
 	private static String disassemble(final MemoryView memory, final long entry) {
 		String s = "";
 		final ByteStream input = memory.createStream(entry);
@@ -160,7 +165,7 @@ public class Elf {
 
 			String line = "";
 			try {
-				int prefix = input.getByte();
+				int prefix = input.getUnsignedByte();
 				final boolean rex_w;
 				final boolean rex_r;
 				final boolean rex_x;
@@ -171,7 +176,7 @@ public class Elf {
 					rex_r = (prefix & 4) != 0;
 					rex_x = (prefix & 2) != 0;
 					rex_b = (prefix & 1) != 0;
-					prefix = input.getByte();
+					prefix = input.getUnsignedByte();
 				} else {
 					rex_w = false;
 					rex_r = false;
@@ -182,7 +187,7 @@ public class Elf {
 				final int opcode = prefix;
 				switch (opcode) {
 				case 0x0f: {
-					final int extendedOpcode = input.getByte();
+					final int extendedOpcode = input.getUnsignedByte();
 					switch (extendedOpcode) {
 					case 0x05:
 						line = "syscall";
@@ -199,27 +204,23 @@ public class Elf {
 				case 0xbf: {
 					final int dstReg = opcode & 0x07;
 					final int imm = input.getInt();
-					line = String.format("r%d = 0x%08x", dstReg, imm);
+					line = String.format("%s = 0x%08x", getRegisterName(dstReg), imm);
 					break;
 				}
 				case 0x89: {
-					final int n = input.getByte();
+					final int n = input.getUnsignedByte();
 					final int dstReg = n & 0b00000111;
 					final int srcReg = (n & 0b00111000) >>> 3;
-					line = String.format("r%d = r%d", dstReg, srcReg);
+					line = String.format("%s = %s", getRegisterName(dstReg), getRegisterName(srcReg));
 					break;
 				}
 
 				case 0x31: {
-					final int regs = input.getByte();
+					final int regs = input.getUnsignedByte();
 					final int dstReg = regs & 0b00000111;
 					final int srcReg = (regs & 0b00111000) >>> 3;
 					final int extraR = (regs & 0x11000000) >>> 6;
-					if (dstReg == srcReg) {
-						line = String.format("r%d = 0", dstReg);
-					} else {
-						line = String.format("r%d ^= r%d %d", dstReg, srcReg, extraR);
-					}
+					line = String.format("%s = %s %d", getRegisterName(dstReg), getRegisterName(srcReg), extraR);
 					break;
 				}
 				case 0xc3: {
@@ -227,21 +228,28 @@ public class Elf {
 					break;
 				}
 				case 0x8d: {
-					final int n = input.getByte();
+					final int n = input.getUnsignedByte();
 					final int mod = n >> 6;
 					switch (mod) {
-					case 0b00:
+					case 0b00: {
 						final int src = n & 0x7;
 						final int dst = n >> 3 & 0x7;
 						final int offset = input.getInt();
-						line = String.format("r%s = r%s + 0x%08x", dst, src, offset);
+						line = String.format("%s = %s + 0x%08x", getRegisterName(dst), getRegisterName(src), offset);
 						break;
+					}
+					case 0b01: {
+						final int src = n & 0x7;
+						final int dst = n >> 3 & 0x7;
+						final int dummy = input.getUnsignedByte();
+						final byte disp = input.getByte();
+						line = String.format("%s = %s %d %d", getRegisterName(dst), getRegisterName(src), dummy, disp);
+						break;
+					}
 					case 0b10:
-						break;
-					case 0b01:
-						break;
+						throw new IllegalStateException();
 					case 0b11:
-						break;
+						throw new IllegalStateException();
 					default:
 						throw new IllegalStateException();
 					}
