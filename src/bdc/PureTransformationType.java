@@ -13,10 +13,14 @@ public interface PureTransformationType {
 	}
 
 	enum Convert implements PureTransformationType {
-		;
+		LONG;
 
 		public static PureTransformationType fromTargetType(final PrimitiveType to) {
-			throw new IllegalStateException();
+			switch (to) {
+			case Long:
+				return Convert.LONG;
+			}
+			throw new IllegalStateException("Unsupported target type: " + to);
 		}
 
 	}

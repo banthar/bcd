@@ -1,6 +1,6 @@
 package bdc;
 
-final class InputPort {
+public final class InputPort {
 	private static int nextId = 0;
 
 	private final Node node;

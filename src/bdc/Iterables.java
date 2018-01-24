@@ -11,7 +11,7 @@ public class Iterables {
 		}
 		final T t = iterator.next();
 		if (iterator.hasNext()) {
-			throw new IllegalStateException();
+			throw new IllegalStateException("Expected only one element: " + iterable);
 		}
 		return t;
 	}

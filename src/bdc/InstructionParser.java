@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-import bdc.BasicBlockBuilder.BinaryOperationType;
 import bdc.BasicBlockBuilder.BitwiseOperationType;
 import bdc.BasicBlockBuilder.CompareType;
 import bdc.BasicBlockBuilder.ShiftType;

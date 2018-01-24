@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 
-final class OutputPort {
+public final class OutputPort {
 	private static int nextId = 0;
 
 	private final Node node;

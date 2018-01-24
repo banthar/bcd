@@ -9,7 +9,7 @@ import java.util.Set;
 
 import bdc.Type.FieldType;
 
-class Node implements InputNode, OutputNode {
+public class Node implements InputNode, OutputNode {
 
 	static int nextId = 0;
 
@@ -190,7 +190,7 @@ class Node implements InputNode, OutputNode {
 		return "Node(" + getNodeId() + ", " + getData() + ")";
 	}
 
-	public Object getData() {
+	public NodeOperation getData() {
 		return this.data;
 	}
 

@@ -22,23 +22,6 @@ import bdc.Type.PrimitiveType;
 
 public class BasicBlockBuilder {
 
-	enum BinaryOperationType implements PureTransformationType {
-		Add("+"), Subtract("-"), Multiply("*"), Divide("/"), Remainder("%");
-		private final String symbol;
-
-		private BinaryOperationType(final String symbol) {
-			this.symbol = symbol;
-		}
-
-		public String getSymbol() {
-			return this.symbol;
-		}
-
-		public static BinaryOperationType fromId(final int id) {
-			return values()[id];
-		}
-	}
-
 	enum ShiftType implements PureTransformationType {
 		Left, Arithmetic, Logical;
 
@@ -429,8 +412,7 @@ public class BasicBlockBuilder {
 					out.format("|<%s> %s", entry.getValue().getId(), entry.getKey() + ": " + entry.getValue().getId());
 				}
 				out.print("}|{");
-				out.print(String.join("|", node.getNodeId(),
-						node.getData().toString().replaceAll("([<>\"\\\\\\]\\[{}])", "\\\\$1")));
+				out.print(String.join("|", node.getNodeId(), escape(node.getData().toString())));
 				out.print("}|{");
 				out.print("<out>out");
 				for (final Entry<? extends PortId, ? extends OutputPort> entry : node.getAllOutputPorts().entrySet()) {
@@ -456,13 +438,21 @@ public class BasicBlockBuilder {
 				out.println(
 						"    " + source.terminator.getNodeId() + ":out -> " + target.inputNode.getNodeId() + ":in;");
 			}
-			if (source.terminator.getData() == "return_value") {
+			if (source.terminator.getData() instanceof ReturnValues) {
 				out.println("    " + source.terminator.getNodeId() + ":out -> " + name + "_end;");
 
 			}
 		}
-		out.println("    " + name + "_start -> " + this.inputNode.getNodeId() + ":in;");
+		out.println("    " + removeSpecialChars(name) + "_start -> " + this.inputNode.getNodeId() + ":in;");
 
+	}
+
+	private String removeSpecialChars(final String s) {
+		return s.replaceAll("([<>\"\\\\\\]\\[{}])", "");
+	}
+
+	String escape(final String s) {
+		return s.replaceAll("([<>\"\\\\\\]\\[{}])", "\\\\$1");
 	}
 
 	public Set<Node> getNodes() {
@@ -577,5 +567,13 @@ public class BasicBlockBuilder {
 			computedValues.put(this.inputNode.getOutput(entry.getKey()), entry.getValue());
 		}
 		return compute(computedValues, this.terminator);
+	}
+
+	public Node getTerminator() {
+		return this.terminator;
+	}
+
+	public Node getInputNode() {
+		return this.inputNode;
 	}
 }

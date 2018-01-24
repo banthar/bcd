@@ -2,7 +2,6 @@ package bdc;
 
 import java.util.Map;
 
-import bdc.BasicBlockBuilder.BinaryOperationType;
 import bdc.BasicBlockBuilder.BitwiseOperationType;
 import bdc.BasicBlockBuilder.ShiftType;
 import bdc.PureTransformationType.Compare;
@@ -13,7 +12,7 @@ import bdc.Type.PrimitiveType;
 public class PureTransformation extends PureOperation {
 
 	private final int inputPorts;
-	private final Object operation;
+	private final PureTransformationType operation;
 
 	public PureTransformation(final FieldType type, final int inputPorts, final PureTransformationType operation) {
 		super(type);
@@ -115,5 +114,9 @@ public class PureTransformation extends PureOperation {
 			}
 		}
 		throw new IllegalStateException("Invalid operation: " + this.operation);
+	}
+
+	public PureTransformationType getOperation() {
+		return this.operation;
 	}
 }

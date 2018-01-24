@@ -1,8 +1,6 @@
 package x86_64;
 
-import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -194,6 +192,30 @@ public class Elf {
 					}
 					break;
 				}
+				case 0x50:
+				case 0x51:
+				case 0x52:
+				case 0x53:
+				case 0x54:
+				case 0x55:
+				case 0x56:
+				case 0x57: {
+					final int srcReg = opcode & 0x07;
+					line = String.format("push %s", getRegisterName(srcReg));
+					break;
+				}
+				case 0x58:
+				case 0x59:
+				case 0x5a:
+				case 0x5b:
+				case 0x5c:
+				case 0x5d:
+				case 0x5e:
+				case 0x5f: {
+					final int dstReg = opcode & 0x07;
+					line = String.format("%s = pop", getRegisterName(dstReg));
+					break;
+				}
 				case 0xb8:
 				case 0xb9:
 				case 0xba:
@@ -292,19 +314,7 @@ public class Elf {
 		throw new IllegalStateException();
 	}
 
-	public static void main(final String[] args) throws Exception {
-		final File file = new File("a.out");
-		try (DataOutputStream out = new DataOutputStream(new FileOutputStream(file))) {
-			file.setExecutable(true);
-			new Elf().write(out, true, true,
-					new byte[] { (byte) 0xB8, 0x3C, 0x00, 0x00, 0x00, 0x31, (byte) 0xFF, 0x0F, 0x05 });
-		}
-		// read(file);
-		read(new File("no_stdlib"));
-		// read(new File("/bin/sh"));
-	}
-
-	private static void read(final File file) throws IOException {
+	public static void read(final File file) throws IOException {
 		try (FileChannel input = FileChannel.open(file.toPath(), StandardOpenOption.READ)) {
 			read(input.map(MapMode.READ_ONLY, 0, input.size()));
 		}
