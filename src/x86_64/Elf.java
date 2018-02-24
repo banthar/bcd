@@ -184,6 +184,15 @@ public class Elf {
 
 				final int opcode = prefix;
 				switch (opcode) {
+				case 0x01: {
+					final int n = input.getUnsignedByte();
+					final int dstReg = n & 0b00000111;
+					final int srcReg = (n & 0b00111000) >>> 3;
+					line = String.format("%s = %s + %s", getRegisterName(dstReg), getRegisterName(dstReg),
+							getRegisterName(srcReg));
+					break;
+				}
+
 				case 0x0f: {
 					final int extendedOpcode = input.getUnsignedByte();
 					switch (extendedOpcode) {
