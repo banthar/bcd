@@ -10,6 +10,10 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
 import java.nio.file.StandardOpenOption;
 
+import bdc.BasicBlockBuilder;
+import bdc.BinaryOperationType;
+import bdc.BlockTransformations;
+import bdc.Type.PrimitiveType;
 import x86_64.MemoryView.InvalidAddressException;
 
 public class Elf {
@@ -152,6 +156,7 @@ public class Elf {
 	}
 
 	private static String disassemble(final MemoryView memory, final long entry) {
+		final BasicBlockBuilder block = BasicBlockBuilder.createBlock();
 		String s = "";
 		final ByteStream input = memory.createStream(entry);
 		while (true) {
@@ -190,6 +195,8 @@ public class Elf {
 					final int srcReg = (n & 0b00111000) >>> 3;
 					line = String.format("%s = %s + %s", getRegisterName(dstReg), getRegisterName(dstReg),
 							getRegisterName(srcReg));
+					block.putLocal(dstReg, block.binaryOperation(PrimitiveType.Integer, BinaryOperationType.Add,
+							block.getLocal(dstReg), block.getLocal(srcReg)));
 					break;
 				}
 
@@ -243,6 +250,7 @@ public class Elf {
 					final int dstReg = n & 0b00000111;
 					final int srcReg = (n & 0b00111000) >>> 3;
 					line = String.format("%s = %s", getRegisterName(dstReg), getRegisterName(srcReg));
+					block.putLocal(dstReg, block.getLocal(srcReg));
 					break;
 				}
 
@@ -256,6 +264,9 @@ public class Elf {
 				}
 				case 0xc3: {
 					line = String.format("ret (near)");
+					block.returnValue(PrimitiveType.Integer, block.getLocal(0));
+					BlockTransformations.removeDirectStackWrites(block);
+					block.dump("XXX");
 					break;
 				}
 				case 0x8d: {
