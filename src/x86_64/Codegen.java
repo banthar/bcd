@@ -12,16 +12,17 @@ import java.util.Set;
 
 import bdc.BasicBlockBuilder;
 import bdc.BinaryOperationType;
-import bdc.FunctionTerminator;
 import bdc.InputPort;
 import bdc.Iterables;
 import bdc.LoadConstantOperation;
 import bdc.Method;
+import bdc.MethodCall;
 import bdc.MethodInit;
 import bdc.Node;
 import bdc.OutputPort;
 import bdc.PortId;
 import bdc.PureTransformation;
+import bdc.ReturnValues;
 
 public class Codegen {
 
@@ -103,6 +104,10 @@ public class Codegen {
 			return bytes;
 		}
 
+		public void call(final Method method) {
+			this.out.put((byte) 0xe8);
+			this.out.putInt(method.hashCode());
+		}
 	}
 
 	public static byte[] codegen(final Method method) {
@@ -174,9 +179,11 @@ public class Codegen {
 	private static void emitNode(final InstructionGenerator instructions, final Node sourceNode,
 			final Map<InputPort, Register> inputRegisters, final Map<OutputPort, Register> outputRegisters,
 			final Map<OutputPort, Register> sourceNodeOutputRegisters) {
-		if (sourceNode.getData() instanceof FunctionTerminator) {
-			assignInputRegister(instructions, inputRegisters, outputRegisters, sourceNode.getInput(PortId.arg(0)),
-					Register.EAX);
+		if (sourceNode.getData() instanceof ReturnValues) {
+			final InputPort inputRegister = sourceNode.getInput(PortId.arg(0));
+			if (inputRegister != null) {
+				assignInputRegister(instructions, inputRegisters, outputRegisters, inputRegister, Register.EAX);
+			}
 			assignInputRegister(instructions, inputRegisters, outputRegisters,
 					sourceNode.getInput(PortId.environment()), Register.ENV);
 			instructions.functionReturn();
@@ -199,6 +206,9 @@ public class Codegen {
 
 		} else if (sourceNode.getData() instanceof MethodInit) {
 
+		} else if (sourceNode.getData() instanceof MethodCall) {
+			final Method method = ((MethodCall) sourceNode.getData()).getMethod();
+			instructions.call(method);
 		} else {
 			throw new IllegalStateException("Unsupported node: " + sourceNode.getData().getClass());
 		}

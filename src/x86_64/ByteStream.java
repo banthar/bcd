@@ -21,8 +21,12 @@ public class ByteStream {
 	}
 
 	public int getInt() throws InvalidAddressException {
-		final int n = 0;
-		return getUnsignedByte() + getUnsignedByte() + getUnsignedByte() + getUnsignedByte();
+		int n = 0;
+		n = n << 8 | getUnsignedByte();
+		n = n << 8 | getUnsignedByte();
+		n = n << 8 | getUnsignedByte();
+		n = n << 8 | getUnsignedByte();
+		return n;
 	}
 
 	public long getPosition() {

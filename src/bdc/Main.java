@@ -14,7 +14,7 @@ public class Main {
 	public static void main(final String[] args) throws Exception {
 		final File bin = new File("bin");
 		final URLClassParser bytecodeLoader = new URLClassParser(new URL[] { bin.toURI().toURL() });
-		final Method mainMethod = bytecodeLoader.loadClass(args[0]).getMethod("f", "(II)I");
+		final Method mainMethod = bytecodeLoader.loadClass(args[0]).getMethod("_start", "()V");
 		mainMethod.parse();
 		try (final PrintStream out = new PrintStream(new File("graph.gv"))) {
 			bytecodeLoader.dump(out);

@@ -298,6 +298,11 @@ public class Elf {
 					break;
 
 				}
+				case 0xe8: {
+					final int offset = input.getInt();
+					line = String.format("call %d", offset);
+					break;
+				}
 				default: {
 					line = String.format("unknown opcode", opcode);
 					break;
