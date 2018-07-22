@@ -16,6 +16,7 @@ public class Main {
 		final URLClassParser bytecodeLoader = new URLClassParser(new URL[] { bin.toURI().toURL() });
 		final Method mainMethod = bytecodeLoader.loadClass(args[0]).getMethod("_start", "()V");
 		mainMethod.parse();
+		ProgramTransformations.optimizeMainMethod(mainMethod);
 		try (final PrintStream out = new PrintStream(new File("graph.gv"))) {
 			bytecodeLoader.dump(out);
 		}

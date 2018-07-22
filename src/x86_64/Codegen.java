@@ -1,8 +1,9 @@
 package x86_64;
 
-import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -10,6 +11,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import bdc.AbstractMethod;
 import bdc.BasicBlockBuilder;
 import bdc.BinaryOperationType;
 import bdc.InputPort;
@@ -18,6 +20,7 @@ import bdc.LoadConstantOperation;
 import bdc.Method;
 import bdc.MethodCall;
 import bdc.MethodInit;
+import bdc.NativeMethod;
 import bdc.Node;
 import bdc.OutputPort;
 import bdc.PortId;
@@ -26,103 +29,41 @@ import bdc.ReturnValues;
 
 public class Codegen {
 
-	enum Register {
-		EAX(0),
+	private final Set<Method> methods;
+	private final Deque<Method> methodsToVisit;
+	private final Map<Method, Integer> symbols;
+	private final InstructionGenerator instructions;
 
-		ECX(1),
-
-		EDX(2),
-
-		EBX(3),
-
-		SIB(4),
-
-		IP(5),
-
-		ESI(6),
-
-		EDI(7),
-
-		R8(8),
-
-		R9(9),
-
-		R10(10),
-
-		R11(11),
-
-		SIB2(12),
-
-		IP2(13),
-
-		R14(14),
-
-		R15(15),
-
-		ENV(-1),
-
-		;
-
-		int index;
-
-		private Register(final int index) {
-			this.index = index;
-		}
-
-		public int getIndex() {
-			return this.index;
-		}
-	}
-
-	static class InstructionGenerator {
-
-		ByteBuffer out = ByteBuffer.allocate(1024);
-
-		public void loadConstant(final Register register, final int value) {
-			this.out.put((byte) (0xb8 | register.getIndex()));
-			this.out.putInt(value);
-		}
-
-		public void functionReturn() {
-			this.out.put((byte) 0xc3);
-		}
-
-		public void add(final Register destination, final Register addend) {
-			this.out.put((byte) 0x01);
-			this.out.put((byte) (addend.getIndex() << 3 | destination.getIndex() | 0xc0));
-		}
-
-		public void move(final Register target, final Register source) {
-			this.out.put((byte) 0x89);
-			this.out.put((byte) ((target.getIndex() << 3) + source.getIndex() | 0xc0));
-		}
-
-		byte[] toBytes() {
-			final byte[] bytes = new byte[this.out.position()];
-			this.out.rewind();
-			this.out.get(bytes);
-			return bytes;
-		}
-
-		public void call(final Method method) {
-			this.out.put((byte) 0xe8);
-			this.out.putInt(method.hashCode());
-		}
+	public Codegen() {
+		this.methods = new HashSet<>();
+		this.methodsToVisit = new ArrayDeque<>();
+		this.symbols = new HashMap<>();
+		this.instructions = new InstructionGenerator(this);
 	}
 
 	public static byte[] codegen(final Method method) {
-		final BasicBlockBuilder block = method.getBlock();
+		final Codegen codegen = new Codegen();
+		codegen.addMethod(method);
+		while (!codegen.methodsToVisit.isEmpty()) {
+			codegen.genMethod(codegen.methodsToVisit.remove());
+		}
+		return codegen.instructions.toBytes();
+	}
 
+	private void genMethod(final Method method) {
+		this.symbols.put(method, this.instructions.out.position());
+		System.out.println(method.getName() + " = " + this.instructions.out.position());
+		final BasicBlockBuilder block = method.getBlock();
 		final Map<OutputPort, Register> outputRegisters = new HashMap<>();
 		allocateArgumentRegisters(outputRegisters, block.getInputNode());
-
 		final Map<InputPort, Register> inputRegisters = new HashMap<>();
+		emitNode(this.instructions, block.getTerminator(), inputRegisters, outputRegisters, Collections.emptyMap());
+	}
 
-		final InstructionGenerator instructions = new InstructionGenerator();
-
-		emitNode(instructions, block.getTerminator(), inputRegisters, outputRegisters, Collections.emptyMap());
-
-		return instructions.toBytes();
+	public void addMethod(final Method method) {
+		if (this.methods.add(method)) {
+			this.methodsToVisit.add(method);
+		}
 	}
 
 	private static void allocateArgumentRegisters(final Map<OutputPort, Register> outputRegisters, final Node init) {
@@ -207,8 +148,17 @@ public class Codegen {
 		} else if (sourceNode.getData() instanceof MethodInit) {
 
 		} else if (sourceNode.getData() instanceof MethodCall) {
-			final Method method = ((MethodCall) sourceNode.getData()).getMethod();
-			instructions.call(method);
+			final AbstractMethod method = ((MethodCall) sourceNode.getData()).getMethod();
+			if (method instanceof Method) {
+				instructions.call((Method) method);
+			} else if (method instanceof NativeMethod) {
+				assignInputRegister(instructions, inputRegisters, outputRegisters, sourceNode.getInput(PortId.arg(0)),
+						Register.EDI);
+				instructions.loadConstant(Register.EAX, 60);
+				instructions.syscall();
+			} else {
+				throw new IllegalStateException("Unknown method type: " + method);
+			}
 		} else {
 			throw new IllegalStateException("Unsupported node: " + sourceNode.getData().getClass());
 		}
@@ -228,4 +178,5 @@ public class Codegen {
 		}
 		return registers;
 	}
+
 }

@@ -4,7 +4,6 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -16,7 +15,7 @@ import java.util.Set;
 import bdc.ConstantPool.ClassReference;
 import bdc.Type.PrimitiveType;
 
-public class Method {
+public class Method extends AbstractMethod {
 
 	private final URLClassParser bytecodeLoader;
 	private final ConstantPool constantPool;
@@ -28,7 +27,6 @@ public class Method {
 	private final List<ClassReference> exceptions;
 	private final String signature;
 	private BasicBlockBuilder block;
-	private final List<Node> callers = new ArrayList<>();
 
 	public Method(final URLClassParser bytecodeLoader, final ConstantPool constantPool, final ClassReference selfType,
 			final int accessFlags, final String name, final String descriptor, final byte[] code,
@@ -141,7 +139,10 @@ public class Method {
 		for (final BasicBlockBuilder block : this.block.getAllLinkedBlocks()) {
 			for (final Node node : block.getNodes()) {
 				if (node.getData() instanceof MethodCall) {
-					targets.add(((MethodCall) node.getData()).getMethod());
+					final AbstractMethod method = ((MethodCall) node.getData()).getMethod();
+					if (method instanceof Method) {
+						targets.add((Method) method);
+					}
 				}
 			}
 		}
@@ -215,10 +216,6 @@ public class Method {
 		return Objects.equals(actualValue, registerValue);
 	}
 
-	public List<Node> getCallers() {
-		return this.callers;
-	}
-
 	public static PortId calleToCallerPort(final PortId portId) {
 		switch (portId.type) {
 		case ENV:
@@ -241,16 +238,13 @@ public class Method {
 		}
 	}
 
+	@Override
 	public Map<PortId, Value> compute(final Map<PortId, Value> constantInput) {
 		final Map<PortId, Value> methodInput = new HashMap<>();
 		for (final Entry<PortId, Value> entry : constantInput.entrySet()) {
 			methodInput.put(callerToCalleePort(entry.getKey()), entry.getValue());
 		}
 		return getBlock().compute(methodInput);
-	}
-
-	public void addCaller(final Node node) {
-		this.callers.add(node);
 	}
 
 	public MethodType getType() {

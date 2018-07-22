@@ -4,3 +4,5 @@ bin/
 *.o
 *.so
 .log
+*.out
+*.gv

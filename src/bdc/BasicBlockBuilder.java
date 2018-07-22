@@ -306,8 +306,11 @@ public class BasicBlockBuilder {
 		if (!this.jumpsOut.isEmpty()) {
 			throw new IllegalStateException();
 		}
-		if (this.terminator != null || this.environment == null) {
-			throw new IllegalStateException();
+		if (this.terminator != null) {
+			throw new IllegalStateException("Block already terminated");
+		}
+		if (this.environment == null) {
+			throw new IllegalStateException("No environment");
 		}
 		if (new HashSet<>(Arrays.asList(targets)).size() != targets.length) {
 			throw new IllegalStateException("Duplicate targets");
@@ -525,7 +528,11 @@ public class BasicBlockBuilder {
 			if (!computedValues.containsKey(source)) {
 				compute(computedValues, source.getNode());
 			}
-			input.put(entry.getKey(), computedValues.get(source));
+			final Value value = computedValues.get(source);
+			if (value == null) {
+				throw new IllegalStateException("value not computed: " + source.getNode() + " " + entry.getKey());
+			}
+			input.put(entry.getKey(), value);
 		}
 		if (node.getData() instanceof PureOperation) {
 			final Map<PortId, ? extends Value> output = ((PureOperation) node.getData()).compute(input);

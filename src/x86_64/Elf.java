@@ -156,10 +156,10 @@ public class Elf {
 	}
 
 	private static String disassemble(final MemoryView memory, final long entry) {
-		final BasicBlockBuilder block = BasicBlockBuilder.createBlock();
 		String s = "";
 		final ByteStream input = memory.createStream(entry);
 		while (true) {
+			final BasicBlockBuilder block = BasicBlockBuilder.createBlock();
 			final long startPosition = input.getPosition();
 
 			if (startPosition > entry + 1024) {
@@ -266,7 +266,6 @@ public class Elf {
 					line = String.format("ret (near)");
 					block.returnValue(PrimitiveType.Integer, block.getLocal(0));
 					BlockTransformations.removeDirectStackWrites(block);
-					block.dump("XXX");
 					break;
 				}
 				case 0x8d: {

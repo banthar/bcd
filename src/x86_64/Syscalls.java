@@ -6,16 +6,14 @@ import java.io.OutputStream;
 
 public class Syscalls {
 
-	public static @interface Syscall {
-		int value();
+	public static class LinuxSyscall {
+		native void syscall(int id, int arg);
 	}
 
-	@Syscall(60)
 	public static void exit(final int code) {
 		System.exit(code);
 	}
 
-	@Syscall(0)
 	public static long read(final int fd, final byte[] buf, final long offset, final long count) throws IOException {
 		return getInputStream(fd).read(buf, (int) offset, (int) count);
 	}
@@ -40,7 +38,6 @@ public class Syscalls {
 		}
 	}
 
-	@Syscall(1)
 	public static long write(final int fd, final byte[] buf, final long offset, final long count) throws IOException {
 		getOutputStream(fd).write(buf, (int) offset, (int) count);
 		return count;
