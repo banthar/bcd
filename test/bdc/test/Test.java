@@ -1,8 +1,11 @@
 package bdc.test;
 
+import java.io.IOException;
+
 public interface Test {
 
-	public static void _start() {
-		System.exit(0);
+	public static void _start() throws IOException {
+		System.exit(1);
+		System.exit(23);
 	}
 }

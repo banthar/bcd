@@ -146,12 +146,13 @@ public class Codegen {
 			}
 
 		} else if (sourceNode.getData() instanceof MethodInit) {
-
 		} else if (sourceNode.getData() instanceof MethodCall) {
 			final AbstractMethod method = ((MethodCall) sourceNode.getData()).getMethod();
 			if (method instanceof Method) {
 				instructions.call((Method) method);
 			} else if (method instanceof NativeMethod) {
+				assignInputRegister(instructions, inputRegisters, outputRegisters,
+						sourceNode.getInput(PortId.environment()), Register.ENV);
 				assignInputRegister(instructions, inputRegisters, outputRegisters, sourceNode.getInput(PortId.arg(0)),
 						Register.EDI);
 				instructions.loadConstant(Register.EAX, 60);
